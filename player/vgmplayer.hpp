@@ -121,6 +121,11 @@ public:
 	UINT8 UnloadFile(void);
 	const VGM_HEADER* GetFileHeader(void) const;
 	const char* GetSongTitle(void);
+	const char* GetSongAuthor(void);
+	const char* GetSongGame(void);
+	const char* GetSongSystem(void);
+	const char* GetSongDate(void);
+	const char* GetSongComment(void);
 	
 	//UINT32 GetSampleRate(void) const;
 	UINT8 SetSampleRate(UINT32 sampleRate);
@@ -152,6 +157,7 @@ private:
 	void ParseXHdr_Data16(UINT32 fileOfs, std::vector<XHDR_DATA16>& xData);
 	
 	UINT8 LoadTags(void);
+	const char* GetTagAtPos(UINT32 pos);
 	std::string GetUTF8String(const UINT8* startPtr, const UINT8* endPtr);
 	
 	void RefreshTSRates(void);

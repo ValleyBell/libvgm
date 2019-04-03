@@ -315,6 +315,31 @@ const char* DROPlayer::GetSongTitle(void)
 	return NULL;
 }
 
+const char* DROPlayer::GetSongAuthor(void)
+{
+	return NULL;
+}
+
+const char* DROPlayer::GetSongGame(void)
+{
+	return NULL;
+}
+
+const char* DROPlayer::GetSongSystem(void)
+{
+	return NULL;
+}
+
+const char* DROPlayer::GetSongDate(void)
+{
+	return NULL;
+}
+
+const char* DROPlayer::GetSongComment(void)
+{
+	return NULL;
+}
+
 UINT8 DROPlayer::SetSampleRate(UINT32 sampleRate)
 {
 	if (_playState & PLAYSTATE_PLAY)

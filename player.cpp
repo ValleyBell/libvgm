@@ -130,24 +130,18 @@ int main(int argc, char* argv[])
 	{
 		S98Player* s98play = dynamic_cast<S98Player*>(player);
 		const S98_HEADER* s98hdr = s98play->GetFileHeader();
-		const char* s98Title = player->GetSongTitle();
 		
 		printf("S98 v%u, Total Length: %.2f s, Loop Length: %.2f s, Tick Rate: %u/%u", s98hdr->fileVer,
 				player->Tick2Second(player->GetTotalTicks()), player->Tick2Second(player->GetLoopTicks()),
 				s98hdr->tickMult, s98hdr->tickDiv);
-		if (s98Title != NULL)
-			printf("\nSong Title: %s", s98Title);
 	}
 	else if (player->GetPlayerType() == FCC_VGM)
 	{
 		VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(player);
 		const VGM_HEADER* vgmhdr = vgmplay->GetFileHeader();
-		const char* vgmTitle = player->GetSongTitle();
 		
 		printf("VGM v%3X, Total Length: %.2f s, Loop Length: %.2f s", vgmhdr->fileVer,
 				player->Tick2Second(player->GetTotalTicks()), player->Tick2Second(player->GetLoopTicks()));
-		if (vgmTitle != NULL && strlen(vgmTitle) > 0)
-			printf("\nSong Title: %s", vgmTitle);
 	}
 	else if (player->GetPlayerType() == FCC_DRO)
 	{
@@ -166,6 +160,26 @@ int main(int argc, char* argv[])
 		printf("DRO v%u, Total Length: %.2f s, HW Type: %s", drohdr->verMajor,
 				player->Tick2Second(player->GetTotalTicks()), hwType);
 	}
+	
+	const char* songTitle = player->GetSongTitle();
+	const char* songAuthor = player->GetSongAuthor();
+	const char* songGame = player->GetSongGame();
+	const char* songSystem = player->GetSongSystem();
+	const char* songDate = player->GetSongDate();
+	const char* songComment = player->GetSongComment();
+	if (songTitle != NULL && songTitle[0] != '\0')
+		printf("\nSong Title: %s", songTitle);
+	if (songAuthor != NULL && songAuthor[0] != '\0')
+		printf("\nSong Author: %s", songAuthor);
+	if (songGame != NULL && songGame[0] != '\0')
+		printf("\nSong Game: %s", songGame);
+	if (songSystem != NULL && songSystem[0] != '\0')
+		printf("\nSong System: %s", songSystem);
+	if (songDate != NULL && songDate[0] != '\0')
+		printf("\nSong Date: %s", songDate);
+	if (songComment != NULL && songComment[0] != '\0')
+		printf("\nSong Comment: %s", songComment);
+	
 	putchar('\n');
 	
 	player->SetSampleRate(sampleRate);

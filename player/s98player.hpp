@@ -53,6 +53,11 @@ public:
 	UINT8 UnloadFile(void);
 	const S98_HEADER* GetFileHeader(void) const;
 	const char* GetSongTitle(void);
+	const char* GetSongAuthor(void);
+	const char* GetSongGame(void);
+	const char* GetSongSystem(void);
+	const char* GetSongDate(void);
+	const char* GetSongComment(void);
 	
 	//UINT32 GetSampleRate(void) const;
 	UINT8 SetSampleRate(UINT32 sampleRate);
@@ -81,6 +86,7 @@ public:
 private:
 	void CalcSongLength(void);
 	UINT8 LoadTags(void);
+	const char* GetTagWithName(const std::string& name);
 	std::string GetUTF8String(const char* startPtr, const char* endPtr);
 	UINT8 ParsePSFTags(const std::string& tagData);
 	UINT32 ReadVarInt(UINT32& filePos);

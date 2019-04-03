@@ -322,6 +322,14 @@ UINT8 VGMPlayer::LoadTags(void)
 	return 0x00;
 }
 
+const char* VGMPlayer::GetTagAtPos(UINT32 pos)
+{
+	if (pos < _tagData.size())
+		return _tagData[pos].c_str();
+	else
+		return NULL;
+}
+
 std::string VGMPlayer::GetUTF8String(const UINT8* startPtr, const UINT8* endPtr)
 {
 	if (_cpcUTF16 == NULL)
@@ -362,10 +370,32 @@ const VGM_HEADER* VGMPlayer::GetFileHeader(void) const
 
 const char* VGMPlayer::GetSongTitle(void)
 {
-	if (_tagData.size() >= 1)
-		return _tagData[0].c_str();
-	else
-		return NULL;
+	return GetTagAtPos(0);
+}
+
+const char* VGMPlayer::GetSongAuthor(void)
+{
+	return GetTagAtPos(6);
+}
+
+const char* VGMPlayer::GetSongGame(void)
+{
+	return GetTagAtPos(2);
+}
+
+const char* VGMPlayer::GetSongSystem(void)
+{
+	return GetTagAtPos(4);
+}
+
+const char* VGMPlayer::GetSongDate(void)
+{
+	return GetTagAtPos(8);
+}
+
+const char* VGMPlayer::GetSongComment(void)
+{
+	return GetTagAtPos(10);
 }
 
 UINT8 VGMPlayer::SetSampleRate(UINT32 sampleRate)

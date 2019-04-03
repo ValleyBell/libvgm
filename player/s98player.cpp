@@ -277,6 +277,17 @@ UINT8 S98Player::LoadTags(void)
 	return 0x00;
 }
 
+const char* S98Player::GetTagWithName(const std::string& name)
+{
+	std::map<std::string, std::string>::const_iterator mapIt;
+	
+	mapIt = _tagData.find(name);
+	if (mapIt != _tagData.end())
+		return mapIt->second.c_str();
+	else
+		return NULL;
+}
+
 std::string S98Player::GetUTF8String(const char* startPtr, const char* endPtr)
 {
 	if (_cpcSJIS != NULL)
@@ -397,13 +408,32 @@ const S98_HEADER* S98Player::GetFileHeader(void) const
 
 const char* S98Player::GetSongTitle(void)
 {
-	std::map<std::string, std::string>::const_iterator mapIt;
-	
-	mapIt = _tagData.find("TITLE");
-	if (mapIt != _tagData.end())
-		return mapIt->second.c_str();
-	else
-		return NULL;
+	return GetTagWithName("TITLE");
+}
+
+const char* S98Player::GetSongAuthor(void)
+{
+	return GetTagWithName("ARTIST");
+}
+
+const char* S98Player::GetSongGame(void)
+{
+	return GetTagWithName("GAME");
+}
+
+const char* S98Player::GetSongSystem(void)
+{
+	return GetTagWithName("SYSTEM");
+}
+
+const char* S98Player::GetSongDate(void)
+{
+	return GetTagWithName("YEAR");
+}
+
+const char* S98Player::GetSongComment(void)
+{
+	return GetTagWithName("COMMENT");
 }
 
 UINT8 S98Player::SetSampleRate(UINT32 sampleRate)
