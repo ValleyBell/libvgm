@@ -6,7 +6,7 @@
 #include <emu/Resampler.h>
 #include "helper.h"
 #include "playerbase.hpp"
-#include "../utils/FileLoader.hpp"
+#include "../utils/FileLoader.h"
 #include <vector>
 
 
@@ -73,8 +73,8 @@ public:
 	
 	UINT32 GetPlayerType(void) const;
 	const char* GetPlayerName(void) const;
-	static UINT8 IsMyFile(FileLoader& fileLoader);
-	UINT8 LoadFile(FileLoader& fileLoader);
+	static UINT8 IsMyFile(FileLoader *fileLoader);
+	UINT8 LoadFile(FileLoader *fileLoader);
 	UINT8 UnloadFile(void);
 	const DRO_HEADER* GetFileHeader(void) const;
 	const char* GetSongTitle(void);

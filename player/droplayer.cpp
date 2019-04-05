@@ -61,24 +61,24 @@ const char* DROPlayer::GetPlayerName(void) const
 	return "DRO";
 }
 
-/*static*/ UINT8 DROPlayer::IsMyFile(FileLoader& fileLoader)
+/*static*/ UINT8 DROPlayer::IsMyFile(FileLoader *fileLoader)
 {
-	fileLoader.ReadUntil(0x10);
-	if (fileLoader.GetFileSize() < 0x10)
+	FileLoader_ReadUntil(fileLoader,0x10);
+	if (FileLoader_GetFileSize(fileLoader) < 0x10)
 		return 0xF1;	// file too small
-	if (memcmp(&fileLoader.GetFileData()[0x00], "DBRAWOPL", 8))
+	if (memcmp(FileLoader_GetFileData(fileLoader), "DBRAWOPL", 8))
 		return 0xF0;	// invalid signature
 	return 0x00;
 }
 
-UINT8 DROPlayer::LoadFile(FileLoader& fileLoader)
+UINT8 DROPlayer::LoadFile(FileLoader *fileLoader)
 {
 	UINT32 tempLng;
 	
 	_fLoad = NULL;
-	fileLoader.ReadUntil(0x10);
-	_fileData = &fileLoader.GetFileData()[0];
-	if (fileLoader.GetFileSize() < 0x10 || memcmp(&_fileData[0x00], "DBRAWOPL", 8))
+	FileLoader_ReadUntil(fileLoader,0x10);
+	_fileData = FileLoader_GetFileData(fileLoader);
+	if (FileLoader_GetFileSize(fileLoader) < 0x10 || memcmp(_fileData, "DBRAWOPL", 8))
 		return 0xF0;	// invalid file
 	
 	// --- try to detect the DRO version ---
@@ -104,9 +104,9 @@ UINT8 DROPlayer::LoadFile(FileLoader& fileLoader)
 	if (_fileHdr.verMajor > 2)
 		return 0xF1;	// unsupported version
 	
-	_fLoad = &fileLoader;
-	_fLoad->ReadFullFile();
-	_fileData = &fileLoader.GetFileData()[0];
+	_fLoad = fileLoader;
+	FileLoader_ReadFullFile(_fLoad);
+	_fileData = FileLoader_GetFileData(fileLoader);
 	
 	switch(_fileHdr.verMajor)
 	{
@@ -219,7 +219,7 @@ void DROPlayer::ScanInitBlock(void)
 		selPort = 0;
 		lastReg = 0x000;
 		// The file begins with a register dump with increasing register numbers.
-		while(filePos < _fLoad->GetFileSize())
+		while(filePos < FileLoader_GetFileSize(_fLoad))
 		{
 			curCmd = _fileData[filePos];
 			if (curCmd == 0x02 || curCmd == 0x03)
@@ -240,7 +240,7 @@ void DROPlayer::ScanInitBlock(void)
 			lastReg = curReg;
 			filePos += 0x02;
 		}
-		while(filePos < _fLoad->GetFileSize())
+		while(filePos < FileLoader_GetFileSize(_fLoad))
 		{
 			curCmd = _fileData[filePos];
 			
@@ -268,7 +268,7 @@ void DROPlayer::ScanInitBlock(void)
 	{
 		lastReg = 0x000;
 		// The file begins with a register dump with increasing register numbers.
-		while(filePos < _fLoad->GetFileSize())
+		while(filePos < FileLoader_GetFileSize(_fLoad))
 		{
 			curCmd = _fileData[filePos];
 			if (curCmd == _fileHdr.cmdDlyShort || curCmd == _fileHdr.cmdDlyLong)
@@ -292,6 +292,7 @@ UINT8 DROPlayer::UnloadFile(void)
 {
 	if (_playState & PLAYSTATE_PLAY)
 		return 0xFF;
+	FileLoader_FreeData(_fLoad);
 	
 	_playState = 0x00;
 	_fLoad = NULL;
@@ -583,7 +584,7 @@ void DROPlayer::ParseFile(UINT32 ticks)
 
 void DROPlayer::DoCommand_v1(void)
 {
-	if (_filePos >= _fLoad->GetFileSize())
+	if (_filePos >= FileLoader_GetFileSize(_fLoad))
 	{
 		DoFileEnd();
 		return;
@@ -642,7 +643,7 @@ void DROPlayer::DoCommand_v1(void)
 
 void DROPlayer::DoCommand_v2(void)
 {
-	if (_filePos >= _fLoad->GetFileSize())
+	if (_filePos >= FileLoader_GetFileSize(_fLoad))
 	{
 		DoFileEnd();
 		return;
