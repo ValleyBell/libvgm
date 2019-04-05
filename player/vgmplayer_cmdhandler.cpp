@@ -14,6 +14,10 @@
 #include "dblk_compr.h"
 #include "helper.h"
 
+#ifdef NDEBUG
+#define fprintf(...)
+#endif
+
 #define fData	(&_fileData[_filePos])	// used by command handlers for better readability
 
 /*static*/ const VGMPlayer::COMMAND_INFO VGMPlayer::_CMD_INFO[0x100] =

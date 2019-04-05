@@ -4,10 +4,9 @@
 #include <stdtype.h>
 #include <emu/EmuStructs.h>
 #include <emu/Resampler.h>
-#include "../utils/StrUtils.h"
+#include "StrUtils.h"
 #include "helper.h"
 #include "playerbase.hpp"
-#include "../utils/FileLoader.h"
 #include <vector>
 #include <map>
 #include <string>
@@ -48,9 +47,9 @@ public:
 	
 	UINT32 GetPlayerType(void) const;
 	const char* GetPlayerName(void) const;
-	static UINT8 IsMyFile(FileLoader *fileLoader);
-	UINT8 LoadFile(FileLoader *fileLoader);
-	UINT8 UnloadFile(void);
+	static UINT8 ProbeBuffer(UINT8 *buffer, UINT32 length);
+	UINT8 LoadBuffer(UINT8 *buffer, UINT32 length);
+	UINT8 UnloadBuffer(void);
 	const S98_HEADER* GetFileHeader(void) const;
 	const char* GetSongTitle(void);
 	
@@ -91,8 +90,9 @@ private:
 	void DoCommand(void);
 	
 	CPCONV* _cpcSJIS;	// ShiftJIS -> UTF-8 codepage conversion
-	FileLoader *_fLoad;
-	const UINT8* _fileData;	// data pointer for quick access, equals _fLoad->GetFileData().data()
+
+	const UINT8* _fileData;
+	UINT32 _fileLength;
 	
 	S98_HEADER _fileHdr;
 	std::vector<S98_DEVICE> _devHdrs;

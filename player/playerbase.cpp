@@ -21,7 +21,7 @@ const char* PlayerBase::GetPlayerName(void) const
 	return "";
 }
 
-/*static*/ UINT8 IsMyFile(FileLoader *fileLoader)
+/*static*/ UINT8 ProbeBuffer(UINT8 *buffer, UINT32 length)
 {
 	return 0xFF;
 }

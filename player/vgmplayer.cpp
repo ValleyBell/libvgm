@@ -24,7 +24,7 @@
 #include <emu/cores/es5506.h>
 
 #include "dblk_compr.h"
-#include "../utils/StrUtils.h"
+#include "StrUtils.h"
 #include "helper.h"
 
 
@@ -115,6 +115,7 @@ VGMPlayer::VGMPlayer() :
 	if (retVal)
 		_cpcUTF16 = NULL;
 	memset(&_pcmComprTbl, 0x00, sizeof(PCM_COMPR_TBL));
+	memset(_bios,0x00,sizeof(_bios));
 	
 	return;
 }
@@ -137,38 +138,30 @@ const char* VGMPlayer::GetPlayerName(void) const
 	return "VGM";
 }
 
-/*static*/ UINT8 VGMPlayer::IsMyFile(FileLoader *fileLoader)
+/*static*/ UINT8 VGMPlayer::ProbeBuffer(UINT8 *buffer, UINT32 length)
 {
-	FileLoader_ReadUntil(fileLoader,0x38);
-	if (FileLoader_GetFileSize(fileLoader) < 0x38)
-		return 0xF1;	// file too small
-	if (memcmp(FileLoader_GetFileData(fileLoader), "Vgm ", 4))
-		return 0xF0;	// invalid signature
+	if(length < 0x38) return 0xF1;
+	if(memcmp(buffer,"Vgm ",4)) return 0xF0;
 	return 0x00;
 }
 
-UINT8 VGMPlayer::LoadFile(FileLoader *fileLoader)
+UINT8 VGMPlayer::LoadBuffer(UINT8 *buffer, UINT32 length)
 {
-	_fLoad = NULL;
-	FileLoader_ReadUntil(fileLoader,0x38);
-	_fileData = FileLoader_GetFileData(fileLoader);
-	if (FileLoader_GetFileSize(fileLoader) < 0x38 || memcmp(_fileData, "Vgm ", 4))
-		return 0xF0;	// invalid file
-	
-	_fLoad = fileLoader;
-	FileLoader_ReadFullFile(_fLoad);
-	_fileData = FileLoader_GetFileData(fileLoader);
-	
+	if(ProbeBuffer(buffer,length)) return 0xF0;
+
+	_fileData = buffer;
+	_fileLength = length;
+
 	// parse main header
 	ParseHeader();
-	
+
 	// parse extra headers
 	ParseXHdr_Data32(_fileHdr.xhChpClkOfs, _xHdrChipClk);
 	ParseXHdr_Data16(_fileHdr.xhChpVolOfs, _xHdrChipVol);
-	
+
 	// parse tags
 	LoadTags();
-	
+
 	return 0x00;
 }
 
@@ -220,8 +213,8 @@ UINT8 VGMPlayer::ParseHeader(void)
 			_fileHdr.xhChpVolOfs = ReadRelOfs(_fileData, _fileHdr.extraHdrOfs + 0x08);
 	}
 	
-	if (! _fileHdr.eofOfs || _fileHdr.eofOfs > FileLoader_GetFileSize(_fLoad))
-		_fileHdr.eofOfs = FileLoader_GetFileSize(_fLoad);	// catch invalid EOF values
+	if (! _fileHdr.eofOfs || _fileHdr.eofOfs > _fileLength)
+		_fileHdr.eofOfs = _fileLength;	// catch invalid EOF values
 	_fileHdr.dataEnd = _fileHdr.eofOfs;
 	// command data ends at the GD3 offset if:
 	//	GD3 is used && GD3 offset < EOF (just to be sure) && GD3 offset > dataOfs (catch files with GD3 between header and data)
@@ -234,7 +227,7 @@ UINT8 VGMPlayer::ParseHeader(void)
 void VGMPlayer::ParseXHdr_Data32(UINT32 fileOfs, std::vector<XHDR_DATA32>& xData)
 {
 	xData.clear();
-	if (! fileOfs || fileOfs >= FileLoader_GetFileSize(_fLoad))
+	if (! fileOfs || fileOfs >= _fileLength)
 		return;
 	
 	UINT32 curPos = fileOfs;
@@ -243,7 +236,7 @@ void VGMPlayer::ParseXHdr_Data32(UINT32 fileOfs, std::vector<XHDR_DATA32>& xData
 	xData.resize(_fileData[curPos]);	curPos ++;
 	for (curChip = 0; curChip < xData.size(); curChip ++, curPos += 0x05)
 	{
-		if (curPos + 0x05 > FileLoader_GetFileSize(_fLoad))
+		if (curPos + 0x05 > _fileLength)
 		{
 			xData.resize(curChip);
 			break;
@@ -260,7 +253,7 @@ void VGMPlayer::ParseXHdr_Data32(UINT32 fileOfs, std::vector<XHDR_DATA32>& xData
 void VGMPlayer::ParseXHdr_Data16(UINT32 fileOfs, std::vector<XHDR_DATA16>& xData)
 {
 	xData.clear();
-	if (! fileOfs || fileOfs >= FileLoader_GetFileSize(_fLoad))
+	if (! fileOfs || fileOfs >= _fileLength)
 		return;
 	
 	UINT32 curPos = fileOfs;
@@ -269,7 +262,7 @@ void VGMPlayer::ParseXHdr_Data16(UINT32 fileOfs, std::vector<XHDR_DATA16>& xData
 	xData.resize(_fileData[curPos]);	curPos ++;
 	for (curChip = 0; curChip < xData.size(); curChip ++, curPos += 0x04)
 	{
-		if (curPos + 0x04 > FileLoader_GetFileSize(_fLoad))
+		if (curPos + 0x04 > _fileLength)
 		{
 			xData.resize(curChip);
 			break;
@@ -340,20 +333,19 @@ std::string VGMPlayer::GetUTF8String(const UINT8* startPtr, const UINT8* endPtr)
 	return result;
 }
 
-UINT8 VGMPlayer::UnloadFile(void)
+UINT8 VGMPlayer::UnloadBuffer(void)
 {
 	if (_playState & PLAYSTATE_PLAY)
 		return 0xFF;
-	FileLoader_FreeData(_fLoad);
-	
+
 	_playState = 0x00;
-	_fLoad = NULL;
 	_fileData = NULL;
+	_fileLength = 0;
 	_fileHdr.fileVer = 0xFFFFFFFF;
 	_fileHdr.dataOfs = 0x00;
 	_devices.clear();
 	_tagData.clear();
-	
+
 	return 0x00;
 }
 
@@ -1099,32 +1091,27 @@ VGMPlayer::CHIP_DEVICE* VGMPlayer::GetDevicePtr(UINT8 chipType, UINT8 chipID)
 	return &_devices[devID];
 }
 
+UINT8 VGMPlayer::LoadBIOS(VGM_BIOS_TYPE type, UINT8 *buffer, UINT32 length)
+{
+	if(type >= VGM_BIOS_UNKNOWN) return 0xF0;
+
+    _bios[type].romData = buffer;
+	_bios[type].romLength = length;
+
+	return 0x00;
+}
+
 void VGMPlayer::LoadOPL4ROM(CHIP_DEVICE* chipDev)
 {
+	if(_bios[VGM_BIOS_OPL4].romLength == 0)
+		return;
+
 	if (chipDev->romWrite == NULL)
 		return;
-	
-	const char* romFile = "yrw801.rom";
-	FILE* hFile;
-	std::vector<UINT8> yrwData;
-	
-	hFile = fopen(romFile, "rb");
-	if (hFile == NULL)
-	{
-		fprintf(stderr, "Warning: Couldn't load %s!\n", romFile);
-		return;
-	}
-	
-	fseek(hFile, 0, SEEK_END);
-	yrwData.resize(ftell(hFile));
-	rewind(hFile);
-	fread(&yrwData[0], 1, yrwData.size(), hFile);
-	fclose(hFile);
-	
-	chipDev->romSize(chipDev->base.defInf.dataPtr, yrwData.size());
-	chipDev->romWrite(chipDev->base.defInf.dataPtr, 0x00, yrwData.size(), &yrwData[0]);
-	yrwData.clear();
-	
+
+	chipDev->romSize(chipDev->base.defInf.dataPtr, _bios[VGM_BIOS_OPL4].romLength);
+	chipDev->romWrite(chipDev->base.defInf.dataPtr, 0x00, _bios[VGM_BIOS_OPL4].romLength, _bios[VGM_BIOS_OPL4].romData);
+
 	return;
 }
 

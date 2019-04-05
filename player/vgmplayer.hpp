@@ -4,11 +4,10 @@
 #include <stdtype.h>
 #include <emu/EmuStructs.h>
 #include <emu/Resampler.h>
-#include "../utils/StrUtils.h"
 #include "helper.h"
 #include "playerbase.hpp"
-#include "../utils/FileLoader.h"
 #include "dblk_compr.h"
+#include "StrUtils.h"
 #include <vector>
 #include <string>
 
@@ -37,6 +36,16 @@ struct VGM_HEADER
 	INT8 loopBase;
 	UINT8 loopModifier;	// 4.4 fixed point
 	INT16 volumeGain;	// 8.8 fixed point, +0x100 = +6 db
+};
+
+struct VGM_BIOS {
+	UINT8 *romData;
+	UINT32 romLength;
+};
+
+enum VGM_BIOS_TYPE {
+	VGM_BIOS_OPL4,
+	VGM_BIOS_UNKNOWN,
 };
 
 class VGMPlayer : public PlayerBase
@@ -116,9 +125,9 @@ public:
 	
 	UINT32 GetPlayerType(void) const;
 	const char* GetPlayerName(void) const;
-	static UINT8 IsMyFile(FileLoader *fileLoader);
-	UINT8 LoadFile(FileLoader *fileLoader);
-	UINT8 UnloadFile(void);
+	static UINT8 ProbeBuffer(UINT8 *buffer, UINT32 length);
+	UINT8 LoadBuffer(UINT8 *buffer, UINT32 length);
+	UINT8 UnloadBuffer(void);
 	const VGM_HEADER* GetFileHeader(void) const;
 	const char* GetSongTitle(void);
 	
@@ -145,6 +154,7 @@ public:
 	UINT8 Reset(void);
 	UINT32 Render(UINT32 smplCnt, WAVE_32BS* data);
 	//UINT8 Seek(...); // TODO
+	UINT8 LoadBIOS(VGM_BIOS_TYPE, UINT8 *buffer, UINT32 length); // for loading BIOS data, before calling InitDevices
 	
 private:
 	UINT8 ParseHeader(void);
@@ -215,8 +225,9 @@ private:
 	void Cmd_AY_Stereo(void);				// command 30 - set AY8910 stereo mask
 	
 	CPCONV* _cpcUTF16;	// UTF-16 LE -> UTF-8 codepage conversion
-	FileLoader *_fLoad;
-	const UINT8* _fileData;	// data pointer for quick access, equals _fLoad->GetFileData().data()
+	const UINT8* _fileData;
+	UINT32 _fileLength;
+	struct VGM_BIOS _bios[VGM_BIOS_UNKNOWN]; // storage for bios roms
 	
 	enum
 	{

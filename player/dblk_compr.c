@@ -6,6 +6,10 @@
 #include <common_def.h>
 #include "dblk_compr.h"
 
+#ifdef NDEBUG
+#define fprintf(...)
+#endif
+
 // integer types for fast integer calculation
 // The bit number defines how many bits are required, but the types can be larger for increased speed.
 typedef UINT16	FUINT8;

@@ -12,7 +12,6 @@ set(UTIL_HEADERS
 	OSMutex.h
 	OSSignal.h
 	OSThread.h
-	StrUtils.h
 )
 set(UTIL_INCLUDES)
 set(UTIL_LIBS)
@@ -45,36 +44,6 @@ elseif(CMAKE_USE_PTHREADS_INIT)
 	)
 endif()
 set(UTIL_LIBS ${UTIL_LIBS} Threads::Threads)
-
-
-
-# String Codepage Conversion
-# --------------------------
-find_package(Iconv QUIET)
-if(WIN32)
-	if(${ICONV_FOUND})
-		set(CAN_WINAPI OFF)
-	else()
-		set(CAN_WINAPI ON)
-	endif()
-else()
-	set(CAN_WINAPI OFF)
-endif()
-
-
-option(UTIL_CHARCNV_ICONV "Charset Conversion: iconv" ${ICONV_FOUND})
-option(UTIL_CHARCNV_WINAPI "Charset Conversion: WinAPI" ${CAN_WINAPI})
-
-
-if(UTIL_CHARCNV_WINAPI)
-	set(UTIL_FILES ${UTIL_FILES} StrUtils-CPConv_Win.c)
-else()
-	find_package(Iconv REQUIRED)
-	set(UTIL_FILES ${UTIL_FILES} StrUtils-CPConv_IConv.c)
-	set(UTIL_LIBS ${UTIL_LIBS} Iconv::Iconv)
-endif()
-
-
 
 add_library(${PROJECT_NAME} STATIC ${UTIL_FILES})
 set_property(TARGET ${PROJECT_NAME} PROPERTY POSITION_INDEPENDENT_CODE ON)

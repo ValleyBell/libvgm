@@ -3,7 +3,6 @@
 
 #include <stdtype.h>
 #include <emu/Resampler.h>
-#include "../utils/FileLoader.h"
 
 
 #define PLAYSTATE_PLAY	0x01	// is playing
@@ -32,9 +31,9 @@ public:
 	
 	virtual UINT32 GetPlayerType(void) const;
 	virtual const char* GetPlayerName(void) const;
-	static UINT8 IsMyFile(FileLoader *fileLoader);
-	virtual UINT8 LoadFile(FileLoader *fileLoader) = 0;
-	virtual UINT8 UnloadFile(void) = 0;
+	static UINT8 ProbeBuffer(UINT8 *buffer, UINT32 length);
+	virtual UINT8 LoadBuffer(UINT8 *buffer, UINT32 length) = 0;
+	virtual UINT8 UnloadBuffer(void) = 0;
 	virtual const char* GetSongTitle(void) = 0;
 	
 	virtual UINT32 GetSampleRate(void) const;

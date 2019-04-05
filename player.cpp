@@ -261,7 +261,7 @@ int main(int argc, char* argv[])
 	StopDiskWriter();
 	
 	player->Stop();
-	player->UnloadFile();
+	player->UnloadBuffer();
 	delete player;	player = NULL;
 	
 	}	// end for(curSong)
@@ -290,16 +290,17 @@ static UINT8 GetPlayerForFile(const char* fileName, FileLoader *fLoad, PlayerBas
 	if (retVal)
 		return retVal;
 	
-	if (! VGMPlayer::IsMyFile(fLoad))
+	if (! VGMPlayer::ProbeBuffer(FileLoader_GetFileData(fLoad),FileLoader_GetFileSize(fLoad)))
 		player = new VGMPlayer;
-	else if (! S98Player::IsMyFile(fLoad))
+	else if (! S98Player::ProbeBuffer(FileLoader_GetFileData(fLoad),FileLoader_GetFileSize(fLoad)))
 		player = new S98Player;
-	else if (! DROPlayer::IsMyFile(fLoad))
+	else if (! DROPlayer::ProbeBuffer(FileLoader_GetFileData(fLoad),FileLoader_GetFileSize(fLoad)))
 		player = new DROPlayer;
 	else
 		return 0xFF;
-	
-	retVal = player->LoadFile(fLoad);
+	FileLoader_ReadFullFile(fLoad);
+
+	retVal = player->LoadBuffer(FileLoader_GetFileData(fLoad),FileLoader_GetFileSize(fLoad));
 	if (retVal < 0x80)
 		*retPlayer = player;
 	else

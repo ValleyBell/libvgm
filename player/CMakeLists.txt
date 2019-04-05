@@ -26,6 +26,27 @@ set(PLAYER_HEADERS
 set(PLAYER_INCLUDES)
 set(PLAYER_LIBS)
 
+# String Codepage Conversion
+# --------------------------
+find_package(Iconv QUIET)
+if(WIN32)
+	set(CAN_WINAPI NOT ${ICONV_FOUND})
+else()
+	set(CAN_WINAPI OFF)
+endif()
+
+
+option(PLAYER_CHARCNV_ICONV "Charset Conversion: iconv" ${ICONV_FOUND})
+option(PLAYER_CHARCNV_WINAPI "Charset Conversion: WinAPI" ${CAN_WINAPI})
+
+if(PLAYER_CHARCNV_WINAPI)
+	set(PLAYER_FILES ${PLAYER_FILES} StrUtils-CPConv_Win.c)
+else()
+	find_package(Iconv REQUIRED)
+	set(PLAYER_FILES ${PLAYER_FILES} StrUtils-CPConv_IConv.c)
+	set(PLAYER_LIBS ${PLAYER_LIBS} Iconv::Iconv)
+endif()
+
 add_library(${PROJECT_NAME} STATIC ${PLAYER_FILES})
 set_property(TARGET ${PROJECT_NAME} PROPERTY POSITION_INDEPENDENT_CODE ON)
 
