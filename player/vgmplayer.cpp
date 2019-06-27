@@ -69,22 +69,14 @@
 INLINE UINT16 ReadLE16(const UINT8* data)
 {
 	// read 16-Bit Word (Little Endian/Intel Byte Order)
-#ifdef VGM_LITTLE_ENDIAN
-	return *(UINT16*)data;
-#else
 	return (data[0x01] << 8) | (data[0x00] << 0);
-#endif
 }
 
 INLINE UINT32 ReadLE32(const UINT8* data)
 {
 	// read 32-Bit Word (Little Endian/Intel Byte Order)
-#ifdef VGM_LITTLE_ENDIAN
-	return	*(UINT32*)data;
-#else
 	return	(data[0x03] << 24) | (data[0x02] << 16) |
 			(data[0x01] <<  8) | (data[0x00] <<  0);
-#endif
 }
 
 INLINE UINT32 ReadRelOfs(const UINT8* data, UINT32 fileOfs)
