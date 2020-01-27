@@ -10,9 +10,12 @@ set(PLAYER_FILES
 	helper.c
 	playerbase.cpp
 	droplayer.cpp
+	droplayer_c.cpp
 	s98player.cpp
+	s98player_c.cpp
 	vgmplayer_cmdhandler.cpp
 	vgmplayer.cpp
+	vgmplayer_c.cpp
 )
 # export headers
 set(PLAYER_HEADERS
@@ -20,8 +23,11 @@ set(PLAYER_HEADERS
 	helper.h
 	playerbase.hpp
 	droplayer.hpp
+	droplayer.h
 	s98player.hpp
+	s98player.h
 	vgmplayer.hpp
+	vgmplayer.h
 )
 set(PLAYER_INCLUDES)
 set(PLAYER_LIBS)
