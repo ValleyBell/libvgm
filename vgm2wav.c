@@ -121,6 +121,7 @@ int main(int argc, const char *argv[]) {
     loader = FileLoader_Init(argv[1]);
     if(loader == NULL) {
         fprintf(stderr,"failed to create FileLoader\n");
+        return 1;
     }
     DataLoader_SetPreloadBytes(loader,0x100);
     if(DataLoader_Load(loader)) {
