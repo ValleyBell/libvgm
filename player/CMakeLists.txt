@@ -24,10 +24,14 @@ set(PLAYER_HEADERS
 	playerbase.hpp
 	droplayer.hpp
 	droplayer.h
+	droplayerbase.h
 	s98player.hpp
 	s98player.h
+	s98playerbase.h
 	vgmplayer.hpp
 	vgmplayer.h
+	vgmplayerbase.h
+	playerbase.h
 )
 set(PLAYER_INCLUDES)
 set(PLAYER_LIBS)
