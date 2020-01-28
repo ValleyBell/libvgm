@@ -4,20 +4,15 @@
 #include <stdtype.h>
 #include <emu/Resampler.h>
 #include <utils/DataLoader.h>
-
-#ifndef DLLEXPORT
-#ifdef _MSC_VER
-#define DLLEXPORT __declspec(dllexport)
-#else
-#define DLLEXPORT
-#endif
-#endif
+#include "playerbase.h"
+#include "vgmplayerbase.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef struct VGMPlayer VGMPlayer;
+typedef struct VGM_PLAY_OPTIONS VGM_PLAY_OPTIONS;
 
 /* same as PLAYER_EVENT_CB from playerbase.hpp */
 typedef UINT8 (*VGMPLAYER_EVENT_CB)(VGMPlayer *player, void *userParam, UINT8 evtType, void *evtParam);
@@ -27,14 +22,30 @@ DLLEXPORT UINT8 VGMPlayer_IsMyFile(DATA_LOADER *);
 DLLEXPORT VGMPlayer * VGMPlayer_New(void);
 DLLEXPORT void VGMPlayer_Delete(VGMPlayer *);
 
+DLLEXPORT UINT32 VGMPlayer_GetPlayerType(VGMPlayer *);
+DLLEXPORT const char * VGMPlayer_GetPlayerName(VGMPlayer *);
+
 DLLEXPORT UINT8 VGMPlayer_LoadFile(VGMPlayer *, DATA_LOADER *);
 DLLEXPORT UINT8 VGMPlayer_UnloadFile(VGMPlayer *);
 
 DLLEXPORT const char * const * VGMPlayer_GetTags(VGMPlayer *);
+
+DLLEXPORT UINT8 VGMPlayer_GetSongInfo(VGMPlayer *, PLR_SONG_INFO *songInf);
+
+/* returns a copy of devInfList, needs to be free'd */
+DLLEXPORT UINT8 VGMPlayer_GetSongDeviceInfo(VGMPlayer *, PLR_DEV_INFO ** devInfList, UINT32 *devInfLen);
+
+DLLEXPORT UINT8 VGMPlayer_InitDeviceOptions(PLR_DEV_OPTS *devOpts);
+DLLEXPORT UINT8 VGMPlayer_SetDeviceOptions(VGMPlayer *, UINT32 id , const PLR_DEV_OPTS *devOpts);
+DLLEXPORT UINT8 VGMPlayer_GetDeviceOptions(VGMPlayer *, UINT32 id, PLR_DEV_OPTS *devOpts);
+DLLEXPORT UINT8 VGMPlayer_SetDeviceMuting(VGMPlayer *, UINT32 id, const PLR_MUTE_OPTS *muteOpts);
+DLLEXPORT UINT8 VGMPlayer_GetDeviceMuting(VGMPlayer *, UINT32 id, PLR_MUTE_OPTS *muteOpts);
+DLLEXPORT UINT8 VGMPlayer_SetPlayerOptions(VGMPlayer *, const VGM_PLAY_OPTIONS *);
+DLLEXPORT UINT8 VGMPlayer_GetPlayerOptions(VGMPlayer *, VGM_PLAY_OPTIONS *);
 DLLEXPORT UINT32 VGMPlayer_GetSampleRate(VGMPlayer *);
 DLLEXPORT UINT8 VGMPlayer_SetSampleRate(VGMPlayer *, UINT32 sampleRate);
 DLLEXPORT UINT8 VGMPlayer_SetPlaybackSpeed(VGMPlayer *, double speed);
-DLLEXPORT void VGMPlayer_SetCallback(VGMPLAYER_EVENT_CB cbFunc, void *cbParam);
+DLLEXPORT void VGMPlayer_SetCallback(VGMPlayer *, VGMPLAYER_EVENT_CB cbFunc, void *cbParam);
 DLLEXPORT UINT32 VGMPlayer_Tick2Sample(VGMPlayer *, UINT32 ticks);
 DLLEXPORT UINT32 VGMPlayer_Sample2Tick(VGMPlayer *, UINT32 samples);
 DLLEXPORT double VGMPlayer_Tick2Second(VGMPlayer *player, UINT32 ticks);

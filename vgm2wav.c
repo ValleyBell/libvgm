@@ -10,157 +10,77 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "player/vgmplayer.h"
-#include "player/s98player.h"
-#include "player/droplayer.h"
-#include "utils/DataLoader.h"
-#include "utils/FileLoader.h"
+#include "vgm2wav.h"
 
-#define SAMPLE_RATE 44100
-#define BUFFER_LEN 4096
-#define FADE_LEN 8
+/* see vgm2wav.h for utility functions - packing/unpacking integers,
+ * writing a WAVE header, applying a fade, etc.
+ * This file is focused on showing how to use the c-api */
 
-typedef void  (*DeleteFunc)(void *);
-typedef UINT8 (*LoadFileFunc)(void *, DATA_LOADER *);
-typedef UINT8 (*UnloadFileFunc)(void *);
-typedef UINT8 (*StartFunc)(void *);
-typedef const char * const * (*GetTagsFunc)(void *);
-typedef UINT8 (*SetSampleRateFunc)(void *, UINT32);
-typedef UINT8 (*RenderFunc)(void *, UINT32, WAVE_32BS *);
-typedef UINT32 (*GetTotalPlayTicksFunc)(void *,UINT32);
-typedef UINT32 (*Tick2SampleFunc)(void *, UINT32);
-typedef UINT32 (*GetLoopTicksFunc)(void *);
+/* I use a wrapper struct that allows me to load any kind of file -
+ * VGM, S98, or DRO, and use the same method calls via function
+ * pointers. Details in vgm2wav.h
+ */
 
-struct player_funcs_s {
-    void *player;
-    DeleteFunc Delete;
-    LoadFileFunc LoadFile;
-    UnloadFileFunc UnloadFile;
-    StartFunc Start;
-    GetTagsFunc GetTags;
-    SetSampleRateFunc SetSampleRate;
-    RenderFunc Render;
-    GetTotalPlayTicksFunc GetTotalPlayTicks;
-    Tick2SampleFunc Tick2Sample;
-    GetLoopTicksFunc GetLoopTicks;
-};
+static void set_core(player_funcs *f, UINT8 devId, UINT32 coreId) {
+    PLR_DEV_OPTS devOpts;
+    UINT32 id;
 
-typedef struct player_funcs_s player_funcs;
-
-static void pack_int16le(UINT8 *d, INT16 n) {
-    d[0] = (UINT8)(n      );
-    d[1] = (UINT8)(n >> 8 );
-}
-
-static void pack_uint16le(UINT8 *d, UINT16 n) {
-    d[0] = (UINT8)(n      );
-    d[1] = (UINT8)(n >> 8 );
-}
-
-static void pack_uint32le(UINT8 *d, UINT32 n) {
-    d[0] = (UINT8)(n      );
-    d[1] = (UINT8)(n >> 8 );
-    d[2] = (UINT8)(n >> 16);
-    d[3] = (UINT8)(n >> 24);
-}
-
-static int write_header(FILE *f, unsigned int totalSamples) {
-    unsigned int dataSize = totalSamples * sizeof(INT16) * 2;
-    UINT8 tmp[4];
-    if(fwrite("RIFF",1,4,f) != 4) return 0;
-    pack_uint32le(tmp,dataSize + 44 - 8);
-    if(fwrite(tmp,1,4,f) != 4) return 0;
-
-    if(fwrite("WAVE",1,4,f) != 4) return 0;
-    if(fwrite("fmt ",1,4,f) != 4) return 0;
-
-    pack_uint32le(tmp,16); /*fmtSize */
-    if(fwrite(tmp,1,4,f) != 4) return 0;
-
-    pack_uint16le(tmp,1); /* audioFormat */
-    if(fwrite(tmp,1,2,f) != 2) return 0;
-
-    pack_uint16le(tmp,2); /* numChannels */
-    if(fwrite(tmp,1,2,f) != 2) return 0;
-
-    pack_uint32le(tmp,SAMPLE_RATE);
-    if(fwrite(tmp,1,4,f) != 4) return 0;
-
-    pack_uint32le(tmp,SAMPLE_RATE * 2 * sizeof(INT16));
-    if(fwrite(tmp,1,4,f) != 4) return 0;
-
-    pack_uint16le(tmp,2 * sizeof(INT16));
-    if(fwrite(tmp,1,2,f) != 2) return 0;
-
-    pack_uint16le(tmp,sizeof(INT16) * 8);
-    if(fwrite(tmp,1,2,f) != 2) return 0;
-
-    if(fwrite("data",1,4,f) != 4) return 0;
-
-    pack_uint32le(tmp,dataSize);
-    if(fwrite(tmp,1,4,f) != 4) return 0;
-
-    return 1;
-}
-
-static void pack_samples(UINT8 *d, unsigned int sample_count, WAVE_32BS *data) {
-    unsigned int i = 0;
-    while(i<sample_count) {
-        data[i].L >>= 8;
-        data[i].R >>= 8;
-        if(data[i].L < -0x8000) {
-            data[i].L = -0x8000;
-        } else if(data[i].L > 0x7FFF) {
-            data[i].L = 0x7FFFF;
-        }
-        if(data[i].R < -0x8000) {
-            data[i].R = -0x8000;
-        } else if(data[i].R > 0x7FFF) {
-            data[i].R = 0x7FFFF;
-        }
-        pack_int16le(&d[ 0 ], (INT16)data[i].L);
-        pack_int16le(&d[ sizeof(INT16) ], (INT16)data[i].R);
-        i++;
-        d += (sizeof(INT16) * 2);
-    }
-}
-
-static int write_samples(FILE *f, unsigned int sample_count, UINT8 *d) {
-    return fwrite(d,sizeof(INT16) * 2,sample_count,f) == sample_count;
-}
-
-
-/* apply a fade to a buffer of samples */
-/* samples_rem - remaining total samples, includes fade samples */
-/* samples_fade - total number of fade sampes */
-/* sample_count - number of samples being rendered right now */
-static void fade_samples(unsigned int samples_rem, unsigned int samples_fade, unsigned int sample_count, WAVE_32BS *data) {
-    unsigned int i = 0;
-    unsigned int f = samples_fade;
-    UINT64 fade_vol;
-    double fade;
-
-    if(samples_rem - sample_count > samples_fade) return;
-    if(samples_rem > samples_fade) {
-        i = samples_rem - samples_fade;
-        f += i;
-    } else {
-        f = samples_rem;
-    }
-    while(i<sample_count) {
-        fade = (double)(f-i) / (double)samples_fade;
-        fade *= fade;
-        fade_vol = (UINT64)((f - i)) * (1 << 16);
-        fade_vol /= samples_fade;
-        fade_vol *= fade_vol;
-        fade_vol >>= 16;
-
-        data[i].L = (INT32)(((UINT64)data[i].L * fade_vol) >> 16);
-        data[i].R = (INT32)(((UINT64)data[i].R * fade_vol) >> 16);
-        i++;
-    }
+    /* just going to set the first instance */
+    id = PLR_DEV_ID(devId,0);
+    if(f->GetDeviceOptions(f->player,id,&devOpts)) return;
+    devOpts.emuCore = coreId;
+    f->SetDeviceOptions(f->player,id,&devOpts);
     return;
 }
+
+static void dump_info(player_funcs *f) {
+    PLR_DEV_INFO *devInfo;
+    PLR_SONG_INFO songInfo;
+    const DEV_DEF **devDefList;
+    UINT32 devLen;
+    UINT32 i;
+    UINT8 ret;
+    char str[5];
+
+    devLen = 0;
+    fprintf(stderr,"PlayerName: %s\n",f->GetPlayerName(f->player));
+    f->GetSongInfo(f->player,&songInfo);
+    f->GetSongDeviceInfo(f->player,&devInfo,&devLen);
+
+    FCC2Str(str,songInfo.format);
+    fprintf(stderr,"SongInfo: %s v%X.%X, Rate %u/%u, Len %u, Loop at %d, devices: %u\n",
+      str,
+      songInfo.fileVerMaj,
+      songInfo.fileVerMin,
+      songInfo.tickRateMul,
+      songInfo.tickRateDiv,
+      songInfo.songLen,
+      songInfo.loopTick,
+      songInfo.deviceCnt);
+      
+    for(i=0;i<devLen;i++) {
+        FCC2Str(str,devInfo[i].core);
+        fprintf(stderr,"  Dev %d: Type 0x%02X #%d, Core %s, Clock %u, Rate %u, Volume 0x%X\n",
+          devInfo[i].id,
+          devInfo[i].type,
+          (INT8)devInfo[i].instance,
+          str,
+          devInfo[i].clock,
+          devInfo[i].smplRate,
+          devInfo[i].volume);
+        devDefList = SndEmu_GetDevDefList(devInfo[i].id);
+        fprintf(stderr,"    Cores:");
+        while(*devDefList) {
+            FCC2Str(str,(*devDefList)->coreID);
+            fprintf(stderr," %s",str);
+            devDefList++;
+        }
+        fprintf(stderr,"\n");
+
+    }
+    free(devInfo);
+}
+
 
 int main(int argc, const char *argv[]) {
     player_funcs wrapper;
@@ -210,6 +130,13 @@ int main(int argc, const char *argv[]) {
         return 1;
     }
 
+    /* initialize the wrapper with VGM/S98/DRO function pointers
+     * so for example, if using VGMPlayer, a call to:
+     * wrapper.LoadFile(wrapper.player,loader)
+     * is equivalent to
+     * VGMPlayer_LoadFile(player,loader)
+     */
+
     if(VGMPlayer_IsMyFile(loader) == 0) {
         wrapper.player = VGMPlayer_New();
         if(wrapper.player == NULL) {
@@ -217,16 +144,7 @@ int main(int argc, const char *argv[]) {
             return 1;
         }
 
-        wrapper.Delete            = (DeleteFunc) &VGMPlayer_Delete;
-        wrapper.LoadFile          = (LoadFileFunc) &VGMPlayer_LoadFile;
-        wrapper.UnloadFile        = (UnloadFileFunc) &VGMPlayer_UnloadFile;
-        wrapper.Start             = (StartFunc) &VGMPlayer_Start;
-        wrapper.GetTags           = (GetTagsFunc) &VGMPlayer_GetTags;
-        wrapper.SetSampleRate     = (SetSampleRateFunc) &VGMPlayer_SetSampleRate;
-        wrapper.Render            = (RenderFunc) &VGMPlayer_Render;
-        wrapper.GetTotalPlayTicks = (GetTotalPlayTicksFunc) &VGMPlayer_GetTotalPlayTicks;
-        wrapper.Tick2Sample       = (Tick2SampleFunc) &VGMPlayer_Tick2Sample;
-        wrapper.GetLoopTicks      = (GetLoopTicksFunc) &VGMPlayer_GetLoopTicks;
+        WRAPPER_INIT_FUNCS(VGMPlayer)
     }
 
     else if(S98Player_IsMyFile(loader) == 0) {
@@ -236,16 +154,7 @@ int main(int argc, const char *argv[]) {
             return 1;
         }
 
-        wrapper.Delete            = (DeleteFunc) &S98Player_Delete;
-        wrapper.LoadFile          = (LoadFileFunc) &S98Player_LoadFile;
-        wrapper.UnloadFile        = (UnloadFileFunc) &S98Player_UnloadFile;
-        wrapper.Start             = (StartFunc) &S98Player_Start;
-        wrapper.GetTags           = (GetTagsFunc) &S98Player_GetTags;
-        wrapper.SetSampleRate     = (SetSampleRateFunc) &S98Player_SetSampleRate;
-        wrapper.Render            = (RenderFunc) &S98Player_Render;
-        wrapper.GetTotalPlayTicks = (GetTotalPlayTicksFunc) &S98Player_GetTotalPlayTicks;
-        wrapper.Tick2Sample       = (Tick2SampleFunc) &S98Player_Tick2Sample;
-        wrapper.GetLoopTicks      = (GetLoopTicksFunc) &S98Player_GetLoopTicks;
+        WRAPPER_INIT_FUNCS(S98Player)
     }
 
     else if(DROPlayer_IsMyFile(loader) == 0) {
@@ -254,17 +163,7 @@ int main(int argc, const char *argv[]) {
             fprintf(stderr,"Player_new returned NULL\n");
             return 1;
         }
-
-        wrapper.Delete            = (DeleteFunc) &DROPlayer_Delete;
-        wrapper.LoadFile          = (LoadFileFunc) &DROPlayer_LoadFile;
-        wrapper.UnloadFile        = (UnloadFileFunc) &DROPlayer_UnloadFile;
-        wrapper.Start             = (StartFunc) &DROPlayer_Start;
-        wrapper.GetTags           = (GetTagsFunc) &DROPlayer_GetTags;
-        wrapper.SetSampleRate     = (SetSampleRateFunc) &DROPlayer_SetSampleRate;
-        wrapper.Render            = (RenderFunc) &DROPlayer_Render;
-        wrapper.GetTotalPlayTicks = (GetTotalPlayTicksFunc) &DROPlayer_GetTotalPlayTicks;
-        wrapper.Tick2Sample       = (Tick2SampleFunc) &DROPlayer_Tick2Sample;
-        wrapper.GetLoopTicks      = (GetLoopTicksFunc) &DROPlayer_GetLoopTicks;
+        WRAPPER_INIT_FUNCS(DROPlayer)
     }
 
     else {
@@ -279,16 +178,21 @@ int main(int argc, const char *argv[]) {
         return 1;
     }
 
+    /* going to ask for the FCC_NUKE core for YM2612 */
+    set_core(&wrapper,DEVID_YM2612,FCC_NUKE);
+
     tags = wrapper.GetTags(wrapper.player);
     while(*tags) {
         fprintf(stderr,"%s: %s\n",tags[0],tags[1]);
         tags += 2;
     }
-
     wrapper.SetSampleRate(wrapper.player,44100);
+
 
     /* call Start to update the sample rate multiplier/divisors */
     wrapper.Start(wrapper.player);
+
+    dump_info(&wrapper);
 
     totalSamples = wrapper.Tick2Sample(wrapper.player,wrapper.GetTotalPlayTicks(wrapper.player,2));
 

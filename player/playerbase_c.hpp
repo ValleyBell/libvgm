@@ -9,6 +9,14 @@ UINT8 FUNC(PLAYERBASE_TYPE,IsMyFile)(DATA_LOADER *loader) {
     return PLAYERBASE_TYPE::IsMyFile(loader);
 }
 
+UINT32 FUNC(PLAYERBASE_TYPE,GetPlayerType)(PLAYERBASE_TYPE *player) {
+    return player->GetPlayerType();
+}
+
+const char *FUNC(PLAYERBASE_TYPE,GetPlayerName)(PLAYERBASE_TYPE *player) {
+    return player->GetPlayerName();
+}
+
 PLAYERBASE_TYPE *FUNC(PLAYERBASE_TYPE,New)(void) {
     return new PLAYERBASE_TYPE();
 }
@@ -28,6 +36,73 @@ UINT8 FUNC(PLAYERBASE_TYPE,UnloadFile)(PLAYERBASE_TYPE *player) {
 const char * const * FUNC(PLAYERBASE_TYPE,GetTags)(PLAYERBASE_TYPE *player) {
     return player->GetTags();
 }
+
+UINT8 FUNC(PLAYERBASE_TYPE,GetSongInfo)(PLAYERBASE_TYPE *player, PLR_SONG_INFO *songInf) {
+    return player->GetSongInfo(*songInf);
+}
+
+UINT8 FUNC(PLAYERBASE_TYPE,GetSongDeviceInfo)(PLAYERBASE_TYPE *player, PLR_DEV_INFO **devInfList, UINT32 *devInfLen) {
+    UINT32 i;
+    std::vector<PLR_DEV_INFO> tmpDevInfList;
+    PLR_DEV_INFO *mDevInfList;
+    UINT8 ret;
+    ret = player->GetSongDeviceInfo(tmpDevInfList);
+    if(ret == 0xFF) return ret;
+
+    mDevInfList = (PLR_DEV_INFO *)malloc(sizeof(PLR_DEV_INFO) * tmpDevInfList.size());
+
+    if(mDevInfList == NULL) {
+        tmpDevInfList.clear();
+        return 0xFF;
+    }
+
+    /*
+     *
+     * c++03 states that date should be contiguous, not sure what
+     * c++ version this needs to target - play it safe by copying
+     * every element
+     *
+    */
+    for(i=0;i<tmpDevInfList.size();i++) {
+        memcpy(&mDevInfList[i],&tmpDevInfList[i],sizeof(PLR_DEV_INFO));
+    }
+
+    *devInfList = mDevInfList;
+    *devInfLen = tmpDevInfList.size();
+
+    tmpDevInfList.clear();
+    return ret;
+}
+
+UINT8 FUNC(PLAYERBASE_TYPE,InitDeviceOptions)(PLR_DEV_OPTS *devOpts) {
+    return PLAYERBASE_TYPE::InitDeviceOptions(*devOpts);
+}
+
+UINT8 FUNC(PLAYERBASE_TYPE,SetDeviceOptions)(PLAYERBASE_TYPE *player, UINT32 id, const PLR_DEV_OPTS *devOpts) {
+    return player->SetDeviceOptions(id,*devOpts);
+}
+
+UINT8 FUNC(PLAYERBASE_TYPE,GetDeviceOptions)(PLAYERBASE_TYPE *player, UINT32 id, PLR_DEV_OPTS *devOpts) {
+    return player->GetDeviceOptions(id,*devOpts);
+}
+
+UINT8 FUNC(PLAYERBASE_TYPE,SetDeviceMuting)(PLAYERBASE_TYPE *player, UINT32 id, const PLR_MUTE_OPTS *muteOpts) {
+    return player->SetDeviceMuting(id,*muteOpts);
+}
+
+UINT8 FUNC(PLAYERBASE_TYPE,GetDeviceMuting)(PLAYERBASE_TYPE *player, UINT32 id, PLR_MUTE_OPTS *muteOpts) {
+    return player->GetDeviceMuting(id,*muteOpts);
+}
+
+#if PLAYERBASE_FCC != FCC_S98
+UINT8 FUNC(PLAYERBASE_TYPE,SetPlayerOptions)(PLAYERBASE_TYPE *player, const PLAYERTYPE_PLAY_OPTIONS *playOpts) {
+    return player->SetPlayerOptions(*playOpts);
+}
+
+UINT8 FUNC(PLAYERBASE_TYPE,GetPlayerOptions)(PLAYERBASE_TYPE *player, PLAYERTYPE_PLAY_OPTIONS *playOpts) {
+    return player->GetPlayerOptions(*playOpts);
+}
+#endif
 
 UINT32 FUNC(PLAYERBASE_TYPE,GetSampleRate)(PLAYERBASE_TYPE *player) {
     return player->GetSampleRate();
