@@ -33,7 +33,7 @@
 #define OPT_NES_TRI_NULL		0x0200	// always make Triangle return to null-level when stopping,
 						// prevents clicking (Valley Bell mod) (default: disabled)
 // [NSFPlay FDS core] options
-#define OPT_NES_4085_RESET		0x0400	// OPT_4085_RESET (default: disabled)
+#define OPT_NES_4085_RESET		0x1000	// OPT_4085_RESET (default: disabled)
 
 // default option bitmask: 0x01B7
 
