@@ -144,30 +144,33 @@ if(AUDIODRV_LIBAO)
 	set(AUDIO_PC_REQUIRES ${AUDIO_PC_REQUIRES} "ao")
 endif()
 
+add_library(${PROJECT_NAME}_objlib OBJECT ${AUDIO_FILES})
+set_target_properties(${PROJECT_NAME}_objlib PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_compile_definitions(${PROJECT_NAME}_objlib PUBLIC ${AUDIO_DEFS})
+target_include_directories(${PROJECT_NAME}_objlib PRIVATE ${AUDIO_INCLUDES})
+target_link_libraries(${PROJECT_NAME}_objlib PRIVATE ${AUDIO_LIBS})
 
-add_library(${PROJECT_NAME} ${LIBRARY_TYPE} ${AUDIO_FILES})
-set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+add_library(${PROJECT_NAME} ${LIBRARY_TYPE} $<TARGET_OBJECTS:${PROJECT_NAME}_objlib>)
 target_compile_definitions(${PROJECT_NAME} PUBLIC ${AUDIO_DEFS})
 target_include_directories(${PROJECT_NAME}
 	PUBLIC $<BUILD_INTERFACE:${LIBVGM_SOURCE_DIR}> $<INSTALL_INTERFACE:${LIBVGM_INSTALL_INCLUDE_DIR}>
-	PRIVATE ${AUDIO_INCLUDES}
 )
-target_link_libraries(${PROJECT_NAME} PRIVATE ${AUDIO_LIBS} vgm-utils)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_objlib vgm-utils)
 
 if(WIN32)
 	# for some Windows Audio APIs, we need WinAPI headers from special directories
 	if(NOT MSVC)
-		target_include_directories(${PROJECT_NAME} PRIVATE
+		target_include_directories(${PROJECT_NAME}_objlib PRIVATE
 			${LIBVGM_SOURCE_DIR}/libs/include
 			${LIBVGM_SOURCE_DIR}/libs/include_mingw
 		)
 	elseif(MSVC)
-		target_include_directories(${PROJECT_NAME} PRIVATE
+		target_include_directories(${PROJECT_NAME}_objlib PRIVATE
 			${LIBVGM_SOURCE_DIR}/libs/include
 			${LIBVGM_SOURCE_DIR}/libs/include_vc
 		)
 		if(MSVC_VERSION LESS 1400)
-			target_include_directories(${PROJECT_NAME} PRIVATE
+			target_include_directories(${PROJECT_NAME}_objlib PRIVATE
 				${LIBVGM_SOURCE_DIR}/libs/include_vc6
 			)
 		endif()
@@ -187,7 +190,7 @@ pkgcfg_configure("${LIBVGM_SOURCE_DIR}/cmake/libvgm.pc.in" "${CMAKE_CURRENT_BINA
 		PKGS_PUB vgm-utils
 	)
 
-install(TARGETS ${PROJECT_NAME}
+install(TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_objlib
 		EXPORT "${LIBVGM_NAME}"
 		RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
 		LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"

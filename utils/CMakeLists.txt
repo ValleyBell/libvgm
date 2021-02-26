@@ -88,16 +88,18 @@ endif()
 endif(UTIL_CHARSET_CONV)
 
 
+add_library(${PROJECT_NAME}_objlib OBJECT ${UTIL_FILES})
+set_target_properties(${PROJECT_NAME}_objlib PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_compile_definitions(${PROJECT_NAME}_objlib PUBLIC ${UTIL_DEFS})
+target_include_directories(${PROJECT_NAME}_objlib PRIVATE ${UTIL_INCLUDES})
+target_link_libraries(${PROJECT_NAME}_objlib PRIVATE ${UTIL_LIBS})
 
-add_library(${PROJECT_NAME} ${LIBRARY_TYPE} ${UTIL_FILES})
-set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+add_library(${PROJECT_NAME} ${LIBRARY_TYPE})
 target_compile_definitions(${PROJECT_NAME} PUBLIC ${UTIL_DEFS})
 target_include_directories(${PROJECT_NAME}
 	PUBLIC $<BUILD_INTERFACE:${LIBVGM_SOURCE_DIR}> $<INSTALL_INTERFACE:${LIBVGM_INSTALL_INCLUDE_DIR}>
-	PRIVATE ${UTIL_INCLUDES}
 )
-target_link_libraries(${PROJECT_NAME} PUBLIC ${UTIL_LIBS})
-
+target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_objlib)
 
 pkgcfg_configure("${LIBVGM_SOURCE_DIR}/cmake/libvgm.pc.in" "${CMAKE_CURRENT_BINARY_DIR}/vgm-utils.pc"
 		NAME "LibVGM Utils"
@@ -110,7 +112,7 @@ pkgcfg_configure("${LIBVGM_SOURCE_DIR}/cmake/libvgm.pc.in" "${CMAKE_CURRENT_BINA
 		PKGS_PRIV ${UTIL_PC_PKGS}
 	)
 
-install(TARGETS ${PROJECT_NAME}
+install(TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_objlib
 		EXPORT "${LIBVGM_NAME}"
 		RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
 		LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
@@ -119,3 +121,4 @@ install(TARGETS ${PROJECT_NAME}
 set(LIBVGM_INSTALL_TARGETS ${LIBVGM_INSTALL_TARGETS} "${PROJECT_NAME}" PARENT_SCOPE)
 install(FILES ${UTIL_HEADERS} DESTINATION "${LIBVGM_INSTALL_INCLUDE_DIR}/utils")
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/vgm-utils.pc DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
+
