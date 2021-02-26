@@ -94,12 +94,12 @@ target_compile_definitions(${PROJECT_NAME}_objlib PUBLIC ${UTIL_DEFS})
 target_include_directories(${PROJECT_NAME}_objlib PRIVATE ${UTIL_INCLUDES})
 target_link_libraries(${PROJECT_NAME}_objlib PRIVATE ${UTIL_LIBS})
 
-add_library(${PROJECT_NAME} ${LIBRARY_TYPE})
+add_library(${PROJECT_NAME} ${LIBRARY_TYPE} $<TARGET_OBJECTS:${PROJECT_NAME}_objlib>)
 target_compile_definitions(${PROJECT_NAME} PUBLIC ${UTIL_DEFS})
 target_include_directories(${PROJECT_NAME}
 	PUBLIC $<BUILD_INTERFACE:${LIBVGM_SOURCE_DIR}> $<INSTALL_INTERFACE:${LIBVGM_INSTALL_INCLUDE_DIR}>
 )
-target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_objlib)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${UTIL_LIBS})
 
 pkgcfg_configure("${LIBVGM_SOURCE_DIR}/cmake/libvgm.pc.in" "${CMAKE_CURRENT_BINARY_DIR}/vgm-utils.pc"
 		NAME "LibVGM Utils"

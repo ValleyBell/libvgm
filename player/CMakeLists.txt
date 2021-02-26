@@ -41,8 +41,7 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC ${PLAYER_DEFS})
 target_include_directories(${PROJECT_NAME}
 	PUBLIC $<BUILD_INTERFACE:${LIBVGM_SOURCE_DIR}> $<INSTALL_INTERFACE:${LIBVGM_INSTALL_INCLUDE_DIR}>
 )
-target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_objlib vgm-emu vgm-utils)
-
+target_link_libraries(${PROJECT_NAME} PRIVATE vgm-emu vgm-utils ${PLAYER_LIBS})
 
 pkgcfg_configure("${LIBVGM_SOURCE_DIR}/cmake/libvgm.pc.in" "${CMAKE_CURRENT_BINARY_DIR}/vgm-player.pc"
 		NAME "LibVGM Player"
