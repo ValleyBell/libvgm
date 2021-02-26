@@ -3,7 +3,7 @@ project(vgm-emu)
 
 set(EMU_PC_CFLAGS)
 set(EMU_PC_LDFLAGS)
-
+set(EMU_LIBS)
 
 # Note: If multiple cores are present for a device, the core chosed by default is marked with *.
 
@@ -598,21 +598,25 @@ if(SNDEMU_GA20_ALL)
 	set(EMU_CORE_HEADERS ${EMU_CORE_HEADERS} cores/iremga20.h)
 endif()
 
-
-add_library(${PROJECT_NAME} ${LIBRARY_TYPE} ${EMU_FILES})
-set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_compile_definitions(${PROJECT_NAME} PUBLIC ${EMU_DEFS})
-target_include_directories(${PROJECT_NAME}
-	PUBLIC $<BUILD_INTERFACE:${LIBVGM_SOURCE_DIR}> $<INSTALL_INTERFACE:${LIBVGM_INSTALL_INCLUDE_DIR}>
-	PRIVATE ${LIBVGM_SOURCE_DIR}/libs/include
-)
-
 if(CMAKE_COMPILER_IS_GNUCC OR UNIX)
 	# link Math library
-	target_link_libraries(${PROJECT_NAME} PRIVATE m)
+    set(EMU_LIBS "m")
 	set(EMU_PC_LDFLAGS "-lm")
 endif()
 
+
+add_library(${PROJECT_NAME}_objlib OBJECT ${EMU_FILES})
+set_target_properties(${PROJECT_NAME}_objlib PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_compile_definitions(${PROJECT_NAME}_objlib PUBLIC ${EMU_DEFS})
+target_include_directories(${PROJECT_NAME}_objlib PRIVATE ${LIBVGM_SOURCE_DIR}/libs/include)
+target_link_libraries(${PROJECT_NAME}_objlib PRIVATE ${EMU_LIBS})
+
+add_library(${PROJECT_NAME} ${LIBRARY_TYPE} $<TARGET_OBJECTS:${PROJECT_NAME}_objlib>)
+target_compile_definitions(${PROJECT_NAME} PUBLIC ${EMU_DEFS})
+target_include_directories(${PROJECT_NAME}
+	PUBLIC $<BUILD_INTERFACE:${LIBVGM_SOURCE_DIR}> $<INSTALL_INTERFACE:${LIBVGM_INSTALL_INCLUDE_DIR}>
+)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${EMU_LIBS})
 
 pkgcfg_configure("${LIBVGM_SOURCE_DIR}/cmake/libvgm.pc.in" "${CMAKE_CURRENT_BINARY_DIR}/vgm-emu.pc"
 		NAME "LibVGM Emu"
@@ -624,7 +628,7 @@ pkgcfg_configure("${LIBVGM_SOURCE_DIR}/cmake/libvgm.pc.in" "${CMAKE_CURRENT_BINA
 		LDFLAGS_PUB "-l${PROJECT_NAME}"
 	)
 
-install(TARGETS ${PROJECT_NAME}
+install(TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_objlib
 		EXPORT "${LIBVGM_NAME}"
 		RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
 		LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"

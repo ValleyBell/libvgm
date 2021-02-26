@@ -116,30 +116,29 @@ option(USE_SANITIZERS "use sanitizers" ON)
 # --- main library ---
 add_subdirectory(utils)
 if(USE_SANITIZERS)
-	add_sanitizers(utils)
+	add_sanitizers(vgm-utils_objlib)
 endif(USE_SANITIZERS)
 
 if(BUILD_LIBAUDIO)
 	add_subdirectory(audio)
 	if(USE_SANITIZERS)
-		add_sanitizers(vgm-audio)
+		add_sanitizers(vgm-audio_objlib)
 	endif(USE_SANITIZERS)
 endif()
 
 if(BUILD_LIBEMU)
 	add_subdirectory(emu)
 	if(USE_SANITIZERS)
-		add_sanitizers(vgm-emu)
+		add_sanitizers(vgm-emu_objlib)
 	endif(USE_SANITIZERS)
 endif()
 
 if(BUILD_LIBPLAYER)
 	add_subdirectory(player)
 	if(USE_SANITIZERS)
-		add_sanitizers(vgm-player)
+		add_sanitizers(vgm-player_objlib)
 	endif(USE_SANITIZERS)
 endif()
-
 
 # --- additional stuff ---
 if(BUILD_TESTS)
