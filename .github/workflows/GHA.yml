@@ -14,21 +14,19 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ windows-latest, macos-latest, ubuntu-latest ]
-        build_type: [ Release, Debug ]
-        shell: [ bash ]
-        include:
-          - os: windows-latest
-            shell: msys2 {0}
-        exclude:
-          - os: windows-latest
-            shell: bash
+        config:
+          - { os: windows-latest, shell: "msys2 {0}", build_type: Release }
+          - { os: windows-latest, shell: "msys2 {0}", build_type: Debug }
+          - { os: macos-latest, shell: bash, build_type: Release }
+          - { os: macos-latest, shell: bash, build_type: Debug }
+          - { os: ubuntu-latest, shell: bash, build_type: Release }
+          - { os: ubuntu-latest, shell: bash, build_type: Debug }
       fail-fast: false
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.config.os }}
     defaults:
       run:
-        shell: ${{ matrix.shell }}
+        shell: ${{ matrix.config.shell }}
 
     steps:
     - name: Checkout
@@ -38,7 +36,7 @@ jobs:
       if: runner.os == 'Windows'
       uses: msys2/setup-msys2@v2
       with:
-        install: gcc cmake make zlib iconv
+        install: gcc cmake make zlib libiconv
 
     - name: Dependencies [macOS]
       if: runner.os == 'macOS'
@@ -62,14 +60,14 @@ jobs:
         cmake \
           -B ${GITHUB_WORKSPACE}/build \
           -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/install \
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_BUILD_TYPE=${{ matrix.config.build_type }} \
           -DBUILD_TESTS=ON \
 
     - name: Build
       run: |
         cmake \
           --build ${GITHUB_WORKSPACE}/build \
-          --config ${{ matrix.build_type }} \
+          --config ${{ matrix.config.build_type }} \
           --parallel 2 \
 
     - name: Install
