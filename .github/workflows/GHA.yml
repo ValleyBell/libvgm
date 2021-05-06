@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ master ]
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build:
     strategy:
@@ -34,12 +38,32 @@ jobs:
       run: |
         cmake \
           -B ${{ github.workspace }}/build \
+          -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install \
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
           -DBUILD_TESTS=ON \
 
     - name: Build
-      # Build your program with the given configuration
       run: |
         make \
           -C ${{github.workspace}}/build \
           -j2
+
+    - name: Install
+      run: |
+        make \
+          -C ${{github.workspace}}/build \
+          install
+
+    - name: Check
+      run: |
+        echo "Listing what we installed"
+        echo "========================="
+        find ${{github.workspace}}/install
+        echo ""
+        
+        echo "Listing pkg-config file contents"
+        echo "================================"
+        for pc in ${{github.workspace}}/install/lib/pkg-config/*.pc; do
+          echo $(basename "$pc")
+          cat "$pc"
+        done
