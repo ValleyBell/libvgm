@@ -37,33 +37,34 @@ jobs:
     - name: Configuring
       run: |
         cmake \
-          -B ${{ github.workspace }}/build \
-          -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install \
+          -B ${GITHUB_WORKSPACE}/build \
+          -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/install \
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
           -DBUILD_TESTS=ON \
 
     - name: Build
       run: |
         make \
-          -C ${{github.workspace}}/build \
+          -C ${GITHUB_WORKSPACE}/build \
           -j2
 
     - name: Install
       run: |
         make \
-          -C ${{github.workspace}}/build \
+          -C ${GITHUB_WORKSPACE}/build \
           install
 
     - name: Check
       run: |
         echo "Listing what we installed"
         echo "========================="
-        find ${{github.workspace}}/install
+        find ${GITHUB_WORKSPACE}/install
         echo ""
         
         echo "Listing pkg-config file contents"
         echo "================================"
-        for pc in ${{github.workspace}}/install/lib/pkgconfig/*.pc; do
+        for pc in ${GITHUB_WORKSPACE}/install/lib/pkgconfig/*.pc; do
           echo $(basename "$pc")
           cat "$pc"
+          echo ""
         done
