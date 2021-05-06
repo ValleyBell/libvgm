@@ -1,0 +1,44 @@
+name: Build Tests
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ windows-latest, macos-latest, ubuntu-latest ]
+        build_type: [ Release Debug ]
+      fail-fast: false
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Dependencies [Linux]
+      run: |
+        sudo apt update
+        sudo apt install \
+          libasound2-dev \
+          libpulse-dev \
+          libau-dev \
+          zlib1g-dev \
+
+    - name: Configuring
+      run: |
+        cmake \
+          -B ${{ github.workspace }}/build \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DBUILD_TESTS=ON \
+
+    - name: Build
+      # Build your program with the given configuration
+      run: |
+        make \
+          -C ${{github.workspace}}/build \
+          -j2
