@@ -28,8 +28,8 @@ jobs:
       if: runner.os == 'Windows'
       run: |
         echo "Fixing vendored zlib finding on 64-bit CI..."
-        for lib in zlib{,d}; do
-          mv -v libs/lib/$lib{64,}.lib
+        for libname in zlib{,d}; do
+          mv -v libs/lib/"$libname"{64,}.lib
         done
 
     - name: Dependencies [macOS]
