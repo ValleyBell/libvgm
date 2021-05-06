@@ -63,7 +63,7 @@ jobs:
         
         echo "Listing pkg-config file contents"
         echo "================================"
-        for pc in ${{github.workspace}}/install/lib/pkg-config/*.pc; do
+        for pc in ${{github.workspace}}/install/lib/pkgconfig/*.pc; do
           echo $(basename "$pc")
           cat "$pc"
         done
