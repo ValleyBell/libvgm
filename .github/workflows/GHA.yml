@@ -24,6 +24,21 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
 
+    - name: Dependencies [Windows]
+      if: runner.os == 'Windows'
+      run: |
+        echo "Fixing vendored zlib finding on 64-bit CI..."
+        for lib in zlib{,d}; do
+          mv -v libs/lib/$lib{64,}.lib
+        done
+
+    - name: Dependencies [macOS]
+      if: runner.os == 'macOS'
+      run: |
+        export HOMEBREW_NO_INSTALL_CLEANUP=1
+        brew update
+        brew install libao
+
     - name: Dependencies [Linux]
       if: runner.os == 'Linux'
       run: |
