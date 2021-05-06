@@ -87,6 +87,19 @@ jobs:
         find ${GITHUB_WORKSPACE}/install
         echo ""
         
+        function file_lib() {
+          echo "$(basename "$1")"
+          file "$1"
+          echo ""
+        }
+        export -f file_lib
+        
+        echo "Checking compiled libraries"
+        echo "==========================="
+        find ${GITHUB_WORKSPACE}/install \
+          -name 'libvgm-*' \
+          -exec bash -c "file_lib \"{}\"" \;
+        
         function print_pc() {
           echo "$(basename "$1")"
           cat "$1"
