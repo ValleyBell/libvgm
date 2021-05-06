@@ -98,4 +98,4 @@ jobs:
         echo "================================"
         find ${GITHUB_WORKSPACE}/install/lib/pkgconfig \
           -name '*.pc' \
-          -exec bash -c "print_pr \"{}\"" \;
+          -exec bash -c "print_pc \"{}\"" \;
