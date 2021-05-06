@@ -15,8 +15,8 @@ jobs:
     strategy:
       matrix:
         config:
-          - { os: windows-latest, shell: "msys2 {0}", build_type: Release }
-          - { os: windows-latest, shell: "msys2 {0}", build_type: Debug }
+          - { os: windows-latest, shell: "msys2 {0}", build_type: Release, extra_settings: "-G 'MSYS Makefiles'" }
+          - { os: windows-latest, shell: "msys2 {0}", build_type: Debug, extra_settings: "-G 'MSYS Makefiles'" }
           - { os: macos-latest, shell: bash, build_type: Release }
           - { os: macos-latest, shell: bash, build_type: Debug }
           - { os: ubuntu-latest, shell: bash, build_type: Release }
@@ -62,7 +62,7 @@ jobs:
 
     - name: Configuring
       run: |
-        cmake \
+        cmake ${{ matrix.config.extra_settings }} \
           -B ${GITHUB_WORKSPACE}/build \
           -DCMAKE_INSTALL_PREFIX=${GITHUB_WORKSPACE}/install \
           -DCMAKE_BUILD_TYPE=${{ matrix.config.build_type }} \
