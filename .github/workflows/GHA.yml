@@ -16,9 +16,19 @@ jobs:
       matrix:
         os: [ windows-latest, macos-latest, ubuntu-latest ]
         build_type: [ Release, Debug ]
+        shell: [ bash ]
+        include:
+          - os: windows-latest
+            shell: msys2 {0}
+        exclude:
+          - os: windows-latest
+            shell: bash
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
 
     steps:
     - name: Checkout
@@ -26,11 +36,9 @@ jobs:
 
     - name: Dependencies [Windows]
       if: runner.os == 'Windows'
-      run: |
-        echo "Fixing vendored zlib finding on 64-bit CI..."
-        for buildtype in "" "d"; do
-          mv -v libs/lib/zlib{64,}"$buildtype".lib
-        done
+      uses: msys2/setup-msys2@v2
+      with:
+        install: gcc cmake make zlib iconv
 
     - name: Dependencies [macOS]
       if: runner.os == 'macOS'
