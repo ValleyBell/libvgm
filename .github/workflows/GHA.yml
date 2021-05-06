@@ -81,17 +81,21 @@ jobs:
           --install ${GITHUB_WORKSPACE}/build \
 
     - name: Check
-      shell: bash
       run: |
         echo "Listing what we installed"
         echo "========================="
         find ${GITHUB_WORKSPACE}/install
         echo ""
         
+        function print_pc() {
+          echo "$(basename "$1")"
+          cat "$1"
+          echo ""
+        }
+        export -f print_pc
+        
         echo "Listing pkg-config file contents"
         echo "================================"
-        for pc in ${GITHUB_WORKSPACE}/install/lib/pkgconfig/*.pc; do
-          echo $(basename "$pc")
-          cat "$pc"
-          echo ""
-        done
+        find ${GITHUB_WORKSPACE}/install/lib/pkgconfig \
+          -name '*.pc' \
+          -exec bash -c "print_pr \"{}\"" \;
