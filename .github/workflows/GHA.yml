@@ -21,12 +21,13 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Dependencies [Linux]
+      if: runner.os == 'Linux'
       run: |
         sudo apt update
         sudo apt install \
           libasound2-dev \
           libpulse-dev \
-          libau-dev \
+          libao-dev \
           zlib1g-dev \
 
     - name: Configuring
