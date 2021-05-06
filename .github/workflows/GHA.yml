@@ -81,6 +81,7 @@ jobs:
           --install ${GITHUB_WORKSPACE}/build \
 
     - name: Check
+      shell: bash
       run: |
         echo "Listing what we installed"
         echo "========================="
