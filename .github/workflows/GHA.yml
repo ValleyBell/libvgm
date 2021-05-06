@@ -36,6 +36,8 @@ jobs:
       if: runner.os == 'Windows'
       uses: msys2/setup-msys2@v2
       with:
+        msystem: MINGW64
+        update: true
         install: gcc cmake make zlib libiconv
 
     - name: Dependencies [macOS]
