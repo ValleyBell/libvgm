@@ -44,15 +44,15 @@ jobs:
 
     - name: Build
       run: |
-        make \
-          -C ${GITHUB_WORKSPACE}/build \
-          -j2
+        cmake \
+          --build ${GITHUB_WORKSPACE}/build \
+          --config ${{ matrix.build_type }} \
+          --parallel 2 \
 
     - name: Install
       run: |
-        make \
-          -C ${GITHUB_WORKSPACE}/build \
-          install
+        cmake \
+          --install ${GITHUB_WORKSPACE}/build \
 
     - name: Check
       run: |
