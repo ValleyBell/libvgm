@@ -51,8 +51,8 @@ jobs:
       if: ${{ runner.os == 'Windows' && matrix.config.compiler == 'msvc' }}
       run: |
         echo 'CMAKE_OPTS=-DUTIL_CHARCNV_ICONV=OFF -DUTIL_CHARCNV_WINAPI=ON ' \
-        '-DZLIB_LIBRARY_DEBUG=${GITHUB_WORKSPACE}/libs/lib/zdll.lib ' \
-        '-DZLIB_LIBRARY_RELEASE=${GITHUB_WORKSPACE}/libs/lib/zdll.lib' >> $GITHUB_ENV
+        '-DZLIB_LIBRARY_DEBUG=./libs/lib/zdll.lib ' \
+        '-DZLIB_LIBRARY_RELEASE=./libs/lib/zdll.lib' >> $GITHUB_ENV
 
     - name: Dependencies [macOS]
       if: runner.os == 'macOS'
