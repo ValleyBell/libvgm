@@ -2,7 +2,7 @@ name: Build Tests
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, ci-testing ]
   pull_request:
     branches: [ master ]
 
@@ -15,8 +15,12 @@ jobs:
     strategy:
       matrix:
         config:
-          - { os: windows-latest, shell: "msys2 {0}", build_type: Release, extra_settings: "-G 'MSYS Makefiles'" }
-          - { os: windows-latest, shell: "msys2 {0}", build_type: Debug, extra_settings: "-G 'MSYS Makefiles'" }
+          - { os: windows-latest, shell: bash, compiler: msvc, build_type: Release, extra_settings: "-A Win32 -DUTIL_CHARCNV_ICONV=OFF -DUTIL_CHARCNV_WINAPI=ON" }
+          - { os: windows-latest, shell: bash, compiler: msvc, build_type: Debug, extra_settings: "-A Win32 -DUTIL_CHARCNV_ICONV=OFF -DUTIL_CHARCNV_WINAPI=ON" }
+          #- { os: windows-latest, shell: bash, compiler: msvc, build_type: Release, extra_settings: "-A x64 -DUTIL_CHARCNV_ICONV=OFF -DUTIL_CHARCNV_WINAPI=ON" }
+          #- { os: windows-latest, shell: bash, compiler: msvc, build_type: Debug, extra_settings: "-A x64 -DUTIL_CHARCNV_ICONV=OFF -DUTIL_CHARCNV_WINAPI=ON" }
+          - { os: windows-latest, shell: "msys2 {0}", compiler: mingw, build_type: Release, extra_settings: "-G 'MSYS Makefiles'" }
+          - { os: windows-latest, shell: "msys2 {0}", compiler: mingw, build_type: Debug, extra_settings: "-G 'MSYS Makefiles'" }
           - { os: macos-latest, shell: bash, build_type: Release }
           - { os: macos-latest, shell: bash, build_type: Debug }
           - { os: ubuntu-latest, shell: bash, build_type: Release }
@@ -32,8 +36,8 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
 
-    - name: Dependencies [Windows]
-      if: runner.os == 'Windows'
+    - name: Dependencies [Windows MinGW]
+      if: ${{ runner.os == 'Windows' && runner.compiler == 'mingw' }}
       uses: msys2/setup-msys2@v2
       with:
         msystem: MINGW64
