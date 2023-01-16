@@ -27,9 +27,9 @@ static void mikey_update( void*, UINT32 samples, DEV_SMPL** outputs );
 
 static DEVDEF_RWFUNC devFunc[] =
 {
-  {RWF_REGISTER | RWF_WRITE, DEVRW_A8D8, 0, mikey_write},
-  {RWF_REGISTER | RWF_READ, DEVRW_A8D8, 0, mikey_read},
-  {RWF_CHN_MUTE | RWF_WRITE, DEVRW_ALL, 0, mikey_set_mute_mask},
+  {RWF_REGISTER | RWF_WRITE, DEVRW_A8D8, 0, (void*)mikey_write},
+  {RWF_REGISTER | RWF_READ, DEVRW_A8D8, 0, (void*)mikey_read},
+  {RWF_CHN_MUTE | RWF_WRITE, DEVRW_ALL, 0, (void*)mikey_set_mute_mask},
   {0x00, 0x00, 0, NULL}
 };
 
@@ -167,7 +167,7 @@ namespace Lynx
 namespace
 {
 
-static constexpr int64_t CNT_MAX = std::numeric_limits<int64_t>::max() & ~15;
+static const int64_t CNT_MAX = std::numeric_limits<int64_t>::max() & ~15;
 
 int32_t clamp( int32_t v, int32_t lo, int32_t hi )
 {
@@ -177,7 +177,7 @@ int32_t clamp( int32_t v, int32_t lo, int32_t hi )
 class Timer
 {
 public:
-  Timer() : mValueUpdateTick{}, mAudShift {}, mEnableReload{}, mEnableCount{}, mTimerDone{}, mBackup{ 0 }, mValue{ 0 }
+  Timer() : mValueUpdateTick(), mAudShift(), mEnableReload(), mEnableCount(), mTimerDone(), mBackup( 0 ), mValue( 0 )
   {
   }
 
@@ -267,14 +267,14 @@ private:
 private:
   struct CONTROLA
   {
-    static constexpr uint8_t RESET_DONE = 0b01000000;
-    static constexpr uint8_t ENABLE_RELOAD = 0b00010000;
-    static constexpr uint8_t ENABLE_COUNT = 0b00001000;
-    static constexpr uint8_t AUD_CLOCK_MASK = 0b00000111;
+    static const uint8_t RESET_DONE = 0b01000000;
+    static const uint8_t ENABLE_RELOAD = 0b00010000;
+    static const uint8_t ENABLE_COUNT = 0b00001000;
+    static const uint8_t AUD_CLOCK_MASK = 0b00000111;
   };
   struct CONTROLB
   {
-    static constexpr uint8_t TIMER_DONE = 0b00001000;
+    static const uint8_t TIMER_DONE = 0b00001000;
   };
 
 private:
@@ -290,7 +290,7 @@ private:
 class AudioChannel
 {
 public:
-  AudioChannel( uint32_t number ) : mTimer{}, mNumber{ number }, mShiftRegister{}, mTapSelector{}, mEnableIntegrate{}, mVolume{}, mOutput{}, mCtrlA{}
+  AudioChannel( uint32_t number ) : mTimer(), mNumber( number ), mShiftRegister(), mTapSelector(), mEnableIntegrate(), mVolume(), mOutput(), mCtrlA()
   {
   }
 
@@ -405,8 +405,8 @@ private:
   }
 
 private:
-  static constexpr uint8_t FEEDBACK_7 = 0b10000000;
-  static constexpr uint8_t ENABLE_INTEGRATE = 0b00100000;
+  static const uint8_t FEEDBACK_7 = 0b10000000;
+  static const uint8_t ENABLE_INTEGRATE = 0b00100000;
 
 private:
   Timer mTimer;
@@ -476,32 +476,37 @@ public:
 
   struct AudioSample
   {
+    AudioSample( int16_t l, int16_t r ) : left( l ), right( r ) {}
+
     int16_t left;
     int16_t right;
   };
 
-  static constexpr uint16_t VOLCNTRL = 0x0;
-  static constexpr uint16_t FEEDBACK = 0x1;
-  static constexpr uint16_t OUTPUT = 0x2;
-  static constexpr uint16_t SHIFT = 0x3;
-  static constexpr uint16_t BACKUP = 0x4;
-  static constexpr uint16_t CONTROL = 0x5;
-  static constexpr uint16_t COUNTER = 0x6;
-  static constexpr uint16_t OTHER = 0x7;
+  static const uint16_t VOLCNTRL = 0x0;
+  static const uint16_t FEEDBACK = 0x1;
+  static const uint16_t OUTPUT = 0x2;
+  static const uint16_t SHIFT = 0x3;
+  static const uint16_t BACKUP = 0x4;
+  static const uint16_t CONTROL = 0x5;
+  static const uint16_t COUNTER = 0x6;
+  static const uint16_t OTHER = 0x7;
 
-  static constexpr uint16_t ATTENREG0 = 0x40;
-  static constexpr uint16_t ATTENREG1 = 0x41;
-  static constexpr uint16_t ATTENREG2 = 0x42;
-  static constexpr uint16_t ATTENREG3 = 0x43;
-  static constexpr uint16_t MPAN = 0x44;
-  static constexpr uint16_t MSTEREO = 0x50;
+  static const uint16_t ATTENREG0 = 0x40;
+  static const uint16_t ATTENREG1 = 0x41;
+  static const uint16_t ATTENREG2 = 0x42;
+  static const uint16_t ATTENREG3 = 0x43;
+  static const uint16_t MPAN = 0x44;
+  static const uint16_t MSTEREO = 0x50;
 
-  MikeyPimpl() : mAudioChannels{ AudioChannel{0}, AudioChannel{1}, AudioChannel{2}, AudioChannel{3} },
-    mAttenuationLeft{ 0x3c, 0x3c, 0x3c, 0x3c },
-    mAttenuationRight{ 0x3c, 0x3c, 0x3c, 0x3c }, mMute{ false, false, false, false },
-    mRegisterPool{}, mPan{ 0xff }, mStereo{}
+  MikeyPimpl() : mAudioChannels{ AudioChannel( 0 ), AudioChannel( 1 ), AudioChannel( 2 ), AudioChannel( 3 ) },
+    mAttenuationLeft(),
+    mAttenuationRight(), mMute(),
+    mRegisterPool(), mPan( 0xff ), mStereo()
   {
     std::fill_n( mRegisterPool.data(), mRegisterPool.size(), (uint8_t)0xff );
+    std::fill_n( mAttenuationLeft.data(), mAttenuationLeft.size(), 0x3c );
+    std::fill_n( mAttenuationRight.data(), mAttenuationRight.size(), 0x3c );
+    std::fill_n( mMute.data(), mMute.size(), false );
   }
 
   ~MikeyPimpl() {}
@@ -573,8 +578,8 @@ public:
 
   AudioSample sampleAudio() const
   {
-    int left{};
-    int right{};
+    int left = 0;
+    int right = 0;
 
     for ( size_t i = 0; i < 4; ++i )
     {
@@ -594,7 +599,7 @@ public:
       }
     }
 
-    return { (int16_t)left, (int16_t)right };
+    return AudioSample( (int16_t)left, (int16_t)right );
   }
 
   uint8_t read( int64_t tick, int address )
@@ -604,7 +609,7 @@ public:
     {
       return mAudioChannels[i].readRegister( tick, address & 7 );
     }
-    else if ( address < mRegisterPool.size() )
+    else if ( (size_t)address < mRegisterPool.size() )
       return mRegisterPool[address];
     else
       return 0xff;
@@ -628,7 +633,7 @@ private:
 };
 
 
-Mikey::Mikey( uint32_t sampleRate ) : mMikey{ std::make_unique<MikeyPimpl>() }, mQueue{ std::make_unique<ActionQueue>() }, mTick{}, mNextTick{}, mSampleRate{ sampleRate }, mSamplesRemainder{}, mTicksPerSample{ 16000000 / mSampleRate, 16000000 % mSampleRate }
+Mikey::Mikey( uint32_t sampleRate ) : mMikey( std::make_unique<MikeyPimpl>() ), mQueue( std::make_unique<ActionQueue>() ), mTick(), mNextTick(), mSampleRate( sampleRate ), mSamplesRemainder(), mTicksPerSample( 16000000 / mSampleRate, 16000000 % mSampleRate )
 {
   selectPOPCNT();
   enqueueSampling();
@@ -744,7 +749,7 @@ static UINT8 mikey_start( const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf )
     return 0xff;
   }
 
-  mikey->devData.chipInf = mikey;
+  mikey->devData.chipInf = (void*)mikey;
 
   INIT_DEVINF( retDevInf, &mikey->devData, cfg->smplRate, &devDef );
   return 0x00;
