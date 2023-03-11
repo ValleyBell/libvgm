@@ -1,0 +1,10 @@
+{
+    "C_Cpp.errorSquiggles": "disabled",
+    "makefile.launchConfigurations": [
+        {
+            "cwd": "/workspaces/libvgm",
+            "binaryPath": "/workspaces/libvgm/audiotest",
+            "binaryArgs": []
+        }
+    ]
+}

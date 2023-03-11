@@ -1,5 +1,5 @@
-#ifndef __K053260_H__
-#define __K053260_H__
+#ifndef __K007232_H__
+#define __K007232_H__
 
 #include "../EmuStructs.h"
 
