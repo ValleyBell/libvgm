@@ -33,6 +33,30 @@
 #include "../EmuHelper.h"
 #include "../logging.h"
 
+static void k053260_update(void* param, UINT32 samples, DEV_SMPL **outputs);
+static UINT8 device_start_k053260(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf);
+static void device_stop_k053260(void* chip);
+static void device_reset_k053260(void* chip);
+
+static UINT8 k053260_main_read(void* chip, UINT8 offset);
+static void k053260_main_write(void* chip, UINT8 offset, UINT8 data);
+static UINT8 k053260_read(void* chip, UINT8 offset);
+static void k053260_write(void* chip, UINT8 offset, UINT8 data);
+
+static void k053260_alloc_rom(void* chip, UINT32 memsize);
+static void k053260_write_rom(void *chip, UINT32 offset, UINT32 length, const UINT8* data);
+static void k053260_set_mute_mask(void* chip, UINT32 MuteMask);
+static void k053260_set_log_cb(void* chip, DEVCB_LOG func, void* param);
+
+static DEVDEF_RWFUNC devFunc[] =
+{
+	{RWF_REGISTER | RWF_WRITE, DEVRW_A8D8, 0, k053260_write},
+	{RWF_REGISTER | RWF_READ, DEVRW_A8D8, 0, k053260_read},
+	{RWF_MEMORY | RWF_WRITE, DEVRW_BLOCK, 0, k053260_write_rom},
+	{RWF_MEMORY | RWF_WRITE, DEVRW_MEMSIZE, 0, k053260_alloc_rom},
+	{RWF_CHN_MUTE | RWF_WRITE, DEVRW_ALL, 0, k053260_set_mute_mask},
+	{0x00, 0x00, 0, NULL}
+};
 static DEV_DEF devDef =
 {
   "007232", "RN22", FCC_RN22,
