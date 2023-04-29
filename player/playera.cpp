@@ -53,7 +53,7 @@ static void SampleConv_toS32(void* buffer, INT32 value)
 		value = -0x800000;
 	else if (value > +0x7FFFFF)
 		value = +0x7FFFFF;
-	value <<= 8;	// 24 bit -> 32 bit
+	value *= (1 << 8);	// 24 bit -> 32 bit
 	*(INT32*)buffer = value;
 	return;
 }
