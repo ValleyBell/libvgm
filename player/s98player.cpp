@@ -92,6 +92,7 @@ INLINE void SaveDeviceConfig(std::vector<UINT8>& dst, const void* srcData, size_
 }
 
 S98Player::S98Player() :
+	_fileHdr(),
 	_filePos(0),
 	_fileTick(0),
 	_playTick(0),
