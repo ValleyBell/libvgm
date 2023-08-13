@@ -1,6 +1,3 @@
-// TODO:
-//	- properly handle resampling of blocks larger than the sample buffer size (CAA->smplBufSize).
-//	  Those currently cause memory access errors.
 #include <stddef.h>
 #include <stdlib.h>	// for malloc/free
 
@@ -17,6 +14,23 @@ static void Resmpl_Exec_Old(RESMPL_STATE* CAA, UINT32 length, WAVE_32BS* retSamp
 static void Resmpl_Exec_LinearUp(RESMPL_STATE* CAA, UINT32 length, WAVE_32BS* retSample);
 static void Resmpl_Exec_Copy(RESMPL_STATE* CAA, UINT32 length, WAVE_32BS* retSample);
 static void Resmpl_Exec_LinearDown(RESMPL_STATE* CAA, UINT32 length, WAVE_32BS* retSample);
+
+// Ensures `CAA->smplBufs[0]` and `CAA->smplBufs[1]` can each contain at least `length` samples.
+static void Resmpl_EnsureBuffers(RESMPL_STATE* CAA, UINT32 length)
+{
+	if (CAA->smplBufSize < length)
+	{
+		// We don't need the current buffer's contents,
+		// so we can avoid calling realloc, which could copy the buffer's contents unnecessarily.
+		free(CAA->smplBufs[0]);
+		
+		CAA->smplBufSize = length;
+		CAA->smplBufs[0] = (DEV_SMPL*)malloc(CAA->smplBufSize * 2 * sizeof(DEV_SMPL));
+		if (CAA->smplBufs[0] == NULL)
+			abort();
+		CAA->smplBufs[1] = &CAA->smplBufs[0][CAA->smplBufSize];
+	}
+}
 
 void Resmpl_DevConnect(RESMPL_STATE* CAA, const DEV_INFO* devInf)
 {
@@ -61,9 +75,10 @@ void Resmpl_Init(RESMPL_STATE* CAA)
 			CAA->resampler = RESALGO_OLD;
 	}*/
 	
-	CAA->smplBufSize = CAA->smpRateSrc / 1;	// reserve buffer for 1 second of samples
-	CAA->smplBufs[0] = (DEV_SMPL*)malloc(CAA->smplBufSize * 2 * sizeof(DEV_SMPL));
-	CAA->smplBufs[1] = &CAA->smplBufs[0][CAA->smplBufSize];
+	CAA->smplBufSize = 0;
+	CAA->smplBufs[0] = NULL;
+	CAA->smplBufs[1] = NULL;
+	Resmpl_EnsureBuffers(CAA, CAA->smpRateSrc / 1); // reserve initial buffer for 1 second of samples
 	
 	CAA->smpP = 0x00;
 	CAA->smpLast = 0x00;
@@ -88,6 +103,7 @@ void Resmpl_Init(RESMPL_STATE* CAA)
 
 void Resmpl_Deinit(RESMPL_STATE* CAA)
 {
+	CAA->smplBufSize = 0;
 	free(CAA->smplBufs[0]);
 	CAA->smplBufs[0] = NULL;
 	CAA->smplBufs[1] = NULL;
@@ -148,9 +164,6 @@ static void Resmpl_Exec_Old(RESMPL_STATE* CAA, UINT32 length, WAVE_32BS* retSamp
 	INT32 SmpCnt;	// must be signed, else I'm getting calculation errors
 	INT32 CurSmpl;
 	
-	CurBufL = CAA->smplBufs[0];
-	CurBufR = CAA->smplBufs[1];
-	
 	for (OutPos = 0; OutPos < length; OutPos ++)
 	{
 		CAA->smpLast = CAA->smpNext;
@@ -164,6 +177,10 @@ static void Resmpl_Exec_Old(RESMPL_STATE* CAA, UINT32 length, WAVE_32BS* retSamp
 		else //if (CAA->smpLast < CAA->smpNext)
 		{
 			SmpCnt = CAA->smpNext - CAA->smpLast;
+			
+			Resmpl_EnsureBuffers(CAA, SmpCnt);
+			CurBufL = CAA->smplBufs[0];
+			CurBufR = CAA->smplBufs[1];
 			
 			CAA->StreamUpdate(CAA->su_DataPtr, SmpCnt, CAA->smplBufs);
 			
@@ -226,12 +243,7 @@ static void Resmpl_Exec_LinearUp(RESMPL_STATE* CAA, UINT32 length, WAVE_32BS* re
 	INT32 SmpCnt;	// must be signed, else I'm getting calculation errors
 	UINT64 ChipSmpRateFP;
 	
-	CurBufL = CAA->smplBufs[0];
-	CurBufR = CAA->smplBufs[1];
-	
 	ChipSmpRateFP = FIXPNT_FACT * CAA->smpRateSrc;
-	StreamPnt[0] = &CurBufL[2];
-	StreamPnt[1] = &CurBufR[2];
 	// TODO: Make it work *properly* with large blocks. (this is very hackish)
 	for (OutPos = 0; OutPos < length; OutPos ++)
 	{
@@ -239,12 +251,20 @@ static void Resmpl_Exec_LinearUp(RESMPL_STATE* CAA, UINT32 length, WAVE_32BS* re
 		InPre = (UINT32)fp2i_floor(InPosL);
 		InNow = (UINT32)fp2i_ceil(InPosL);
 		
+		Resmpl_EnsureBuffers(CAA, InNow - CAA->smpNext + 2);
+		CurBufL = CAA->smplBufs[0];
+		CurBufR = CAA->smplBufs[1];
+		
 		CurBufL[0] = CAA->lSmpl.L;
 		CurBufR[0] = CAA->lSmpl.R;
 		CurBufL[1] = CAA->nSmpl.L;
 		CurBufR[1] = CAA->nSmpl.R;
 		if (InNow != CAA->smpNext)
+		{
+			StreamPnt[0] = &CurBufL[2];
+			StreamPnt[1] = &CurBufR[2];
 			CAA->StreamUpdate(CAA->su_DataPtr, InNow - CAA->smpNext, StreamPnt);
+		}
 		
 		InBase = FIXPNT_FACT + (UINT32)(InPosL - (SLINT)CAA->smpNext * FIXPNT_FACT);
 		SmpCnt = FIXPNT_FACT;
@@ -290,6 +310,7 @@ static void Resmpl_Exec_Copy(RESMPL_STATE* CAA, UINT32 length, WAVE_32BS* retSam
 	UINT32 OutPos;
 	
 	CAA->smpNext = CAA->smpP * CAA->smpRateSrc / CAA->smpRateDst;
+	Resmpl_EnsureBuffers(CAA, length);
 	CAA->StreamUpdate(CAA->su_DataPtr, length, CAA->smplBufs);
 	
 	for (OutPos = 0; OutPos < length; OutPos ++)
@@ -332,13 +353,13 @@ static void Resmpl_Exec_LinearDown(RESMPL_STATE* CAA, UINT32 length, WAVE_32BS* 
 	INT32 SmpCnt;	// must be signed, else I'm getting calculation errors
 	UINT64 ChipSmpRateFP;
 	
-	CurBufL = CAA->smplBufs[0];
-	CurBufR = CAA->smplBufs[1];
-	
 	ChipSmpRateFP = FIXPNT_FACT * CAA->smpRateSrc;
 	InPosL = (SLINT)((CAA->smpP + length) * ChipSmpRateFP / CAA->smpRateDst);
 	CAA->smpNext = (UINT32)fp2i_ceil(InPosL);
 	
+	Resmpl_EnsureBuffers(CAA, CAA->smpNext - CAA->smpLast + 1);
+	CurBufL = CAA->smplBufs[0];
+	CurBufR = CAA->smplBufs[1];
 	CurBufL[0] = CAA->lSmpl.L;
 	CurBufR[0] = CAA->lSmpl.R;
 	StreamPnt[0] = &CurBufL[1];
