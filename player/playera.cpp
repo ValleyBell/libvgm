@@ -9,13 +9,6 @@
 
 #include "playera.hpp"
 
-#pragma pack(1)
-struct int24_s
-{
-	INT32 data : 24;
-};
-#pragma pack()
-
 static void SampleConv_toU8(void* buffer, INT32 value)
 {
 	value >>= 16;	// 24 bit -> 8 bit
@@ -29,22 +22,36 @@ static void SampleConv_toU8(void* buffer, INT32 value)
 
 static void SampleConv_toS16(void* buffer, INT32 value)
 {
+	INT16 v;
 	value >>= 8;	// 24 bit -> 16 bit
 	if (value < -0x8000)
 		value = -0x8000;
 	else if (value > +0x7FFF)
 		value = +0x7FFF;
-	*(INT16*)buffer = (INT16)value;
+	v = (INT16)value;
+	memcpy(buffer,&v,sizeof(v));
 	return;
 }
 
 static void SampleConv_toS24(void* buffer, INT32 value)
 {
+	UINT8 tmp[3];
 	if (value < -0x800000)
 		value = -0x800000;
 	else if (value > +0x7FFFFF)
 		value = +0x7FFFFF;
-	((int24_s*)buffer)->data = value;
+#if defined(VGM_LITTLE_ENDIAN)
+	tmp[0] = ( value       ) & 0xFF;
+	tmp[1] = ( value >> 8  ) & 0xFF;
+	tmp[2] = ( value >> 16 ) & 0xFF;
+#elif defined(VGM_BIG_ENDIAN)
+	tmp[0] = ( value >> 16 ) & 0xFF;
+	tmp[1] = ( value >> 8  ) & 0xFF;
+	tmp[2] = ( value       ) & 0xFF;
+#else
+#error unknown endianness
+#endif
+	memcpy(buffer,tmp,sizeof(tmp));
 	return;
 }
 
@@ -55,15 +62,16 @@ static void SampleConv_toS32(void* buffer, INT32 value)
 		value = -0x800000;
 	else if (value > +0x7FFFFF)
 		value = +0x7FFFFF;
-	value <<= 8;	// 24 bit -> 32 bit
-	*(INT32*)buffer = value;
+	value *= (1 << 8);	// 24 bit -> 32 bit
+	memcpy(buffer,&value,sizeof(value));
 	return;
 }
 
 static void SampleConv_toF32(void* buffer, INT32 value)
 {
 	// limiting not required here
-	*(float*)buffer = value / (float)0x800000;
+	float v = value / (float)0x800000;
+	memcpy(buffer,&v,sizeof(v));
 	return;
 }
 
