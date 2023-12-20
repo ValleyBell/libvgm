@@ -95,7 +95,7 @@ UINT64 OSThread_GetID(const OS_THREAD* thr)
 #elif defined (__HAIKU__)
 	return get_pthread_thread_id (thr->id);
 #else
-	return thr->id;
+	return (UINT64)thr->id;
 #endif
 }
 
