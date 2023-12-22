@@ -485,6 +485,11 @@ UINT8 GYMPlayer::SetSampleRate(UINT32 sampleRate)
 	return 0x00;
 }
 
+double GYMPlayer::GetPlaybackSpeed(void) const
+{
+	return _playOpts.genOpts.pbSpeed / (double)0x10000;
+}
+
 UINT8 GYMPlayer::SetPlaybackSpeed(double speed)
 {
 	_playOpts.genOpts.pbSpeed = (UINT32)(0x10000 * speed);

@@ -611,7 +611,7 @@ static void frames_to_little_endian(UINT8 *data, unsigned int frame_count) {
                 repack_int24le(&data[3], &data[3]);
                 break;
             }
-            defafult: /* 16 */ {
+            default: /* 16 */ {
                 repack_int16le(&data[0], &data[0]);
                 repack_int16le(&data[2], &data[2]);
                 break;

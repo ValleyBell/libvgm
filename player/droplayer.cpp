@@ -541,6 +541,11 @@ UINT8 DROPlayer::SetSampleRate(UINT32 sampleRate)
 	return 0x00;
 }
 
+double DROPlayer::GetPlaybackSpeed(void) const
+{
+	return _playOpts.genOpts.pbSpeed / (double)0x10000;
+}
+
 UINT8 DROPlayer::SetPlaybackSpeed(double speed)
 {
 	_playOpts.genOpts.pbSpeed = (UINT32)(0x10000 * speed);
