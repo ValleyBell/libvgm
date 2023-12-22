@@ -321,8 +321,6 @@ protected:
 	UINT64 _tsMult;
 	UINT64 _tsDiv;
 	UINT64 _ttMult;
-	UINT64 _ttDiv;
-
 	UINT64 _lastTsMult;
 	UINT64 _lastTsDiv;
 	

@@ -752,21 +752,19 @@ UINT8 VGMPlayer::SetPlaybackSpeed(double speed)
 
 void VGMPlayer::RefreshTSRates(void)
 {
-	_tsMult = _outSmplRate;
 	_ttMult = 1;
-	_tsDiv = _ttDiv = 44100;
+	_tsDiv = 44100;
 	if (_playOpts.playbackHz && _fileHdr.recordHz)
 	{
-		_tsMult *= _fileHdr.recordHz;
 		_ttMult *= _fileHdr.recordHz;
 		_tsDiv *= _playOpts.playbackHz;
 	}
 	if (_playOpts.genOpts.pbSpeed != 0 && _playOpts.genOpts.pbSpeed != 0x10000)
 	{
-		_tsMult *= 0x10000;
 		_ttMult *= 0x10000;
 		_tsDiv *= _playOpts.genOpts.pbSpeed;
 	}
+	_tsMult = _ttMult * _outSmplRate;
 	if (_tsMult != _lastTsMult ||
 	    _tsDiv != _lastTsDiv)
 	{

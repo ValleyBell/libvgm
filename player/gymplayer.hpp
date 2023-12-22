@@ -160,7 +160,7 @@ private:
 	// tick/sample conversion rates
 	UINT64 _tsMult;
 	UINT64 _tsDiv;
-	
+	UINT64 _ttMult;
 	UINT64 _lastTsMult;
 	UINT64 _lastTsDiv;
 	

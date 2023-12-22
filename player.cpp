@@ -778,7 +778,7 @@ static void DoChipControlMode(PlayerBase* player)
 				
 				droplay->GetPlayerOptions(playOpts);
 				
-				printf("Command [OPL3 data]: ");
+				printf("Command [SPD/OPL3 data]: ");
 				fgets(line, 0x80, stdin);
 				StripNewline(line);
 				

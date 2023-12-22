@@ -556,13 +556,14 @@ UINT8 DROPlayer::SetPlaybackSpeed(double speed)
 
 void DROPlayer::RefreshTSRates(void)
 {
-	_tsMult = _outSmplRate;
+	_ttMult = 1;
 	_tsDiv = _tickFreq;
 	if (_playOpts.genOpts.pbSpeed != 0 && _playOpts.genOpts.pbSpeed != 0x10000)
 	{
-		_tsMult *= 0x10000;
+		_ttMult *= 0x10000;
 		_tsDiv *= _playOpts.genOpts.pbSpeed;
 	}
+	_tsMult = _ttMult * _outSmplRate;
 	if (_tsMult != _lastTsMult ||
 	    _tsDiv != _lastTsDiv)
 	{
@@ -592,7 +593,7 @@ double DROPlayer::Tick2Second(UINT32 ticks) const
 {
 	if (ticks == (UINT32)-1)
 		return -1.0;
-	return ticks / (double)_tickFreq;
+	return (INT64)(ticks * _ttMult) / (double)(INT64)_tsDiv;
 }
 
 UINT8 DROPlayer::GetState(void) const
