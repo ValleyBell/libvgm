@@ -183,6 +183,15 @@ VGMPlayer::VGMPlayer() :
 			else if (devID == DEVID_SCSP)
 				devOpts.coreOpts = OPT_SCSP_BYPASS_DSP;
 			_devOptMap[devID][chipID] = optID;
+			_optDevMap[optID] = (size_t)-1;
+		}
+	}
+	{
+		UINT8 vgmChip;
+		for (vgmChip = 0x00; vgmChip < _CHIP_COUNT; vgmChip ++)
+		{
+			for (chipID = 0; chipID < 2; chipID ++)
+				_vdDevMap[vgmChip][chipID] = (size_t)-1;
 		}
 	}
 	
