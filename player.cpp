@@ -527,7 +527,7 @@ Sound Chip ID:
 		O param - set sound core options (core-specific)
 		SRM param - set sample rate mode (0/1/2, see DEVRI_SRMODE_*)
 		SR param - set emulated sample rate (0 = use rate of output stream)
-		RSM param - set resampling mode [not working]
+		RSM param - set resampling mode
 		M param,param,... - set mute options
 			This is a list of channels to be toggled. (0 = first channel)
 			Additional valid letters:

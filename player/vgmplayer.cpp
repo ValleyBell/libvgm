@@ -1358,6 +1358,7 @@ void VGMPlayer::InitDevices(void)
 		chipDev.chipType = sdCfg.type;
 		chipDev.chipID = chipID;
 		chipDev.optID = _devOptMap[chipType][chipID];
+		chipDev.cfgID = curChip;
 		chipDev.base.defInf.dataPtr = NULL;
 		chipDev.base.linkDev = NULL;
 		
@@ -1573,6 +1574,7 @@ void VGMPlayer::InitDevices(void)
 	{
 		CHIP_DEVICE& chipDev = _devices[curChip];
 		DEV_INFO* devInf = &chipDev.base.defInf;
+		const PLR_DEV_OPTS* devOpts = (chipDev.optID != (size_t)-1) ? &_devOpts[chipDev.optID] : NULL;
 		VGM_BASEDEV* clDev;
 		
 		if (devInf->devDef->SetLogCB != NULL)
@@ -1582,8 +1584,9 @@ void VGMPlayer::InitDevices(void)
 		for (clDev = &chipDev.base; clDev != NULL; clDev = clDev->linkDev, linkCntr ++)
 		{
 			UINT16 chipVol = GetChipVolume(chipDev.vgmChipType, chipDev.chipID, linkCntr);
+			UINT8 resmplMode = (devOpts != NULL) ? devOpts->resmplMode : RSMODE_LINEAR;
 			
-			Resmpl_SetVals(&clDev->resmpl, 0xFF, chipVol, _outSmplRate);
+			Resmpl_SetVals(&clDev->resmpl, resmplMode, chipVol, _outSmplRate);
 			Resmpl_DevConnect(&clDev->resmpl, &clDev->defInf);
 			Resmpl_Init(&clDev->resmpl);
 		}

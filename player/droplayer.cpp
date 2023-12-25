@@ -743,10 +743,12 @@ UINT8 DROPlayer::Start(void)
 		
 		for (clDev = &cDev->base; clDev != NULL; clDev = clDev->linkDev)
 		{
+			UINT8 resmplMode = (devOpts != NULL) ? devOpts->resmplMode : RSMODE_LINEAR;
+			
 			if (devOpts != NULL && clDev->defInf.devDef->SetMuteMask != NULL)
 				clDev->defInf.devDef->SetMuteMask(clDev->defInf.dataPtr, devOpts->muteOpts.chnMute[0]);
 			
-			Resmpl_SetVals(&clDev->resmpl, 0xFF, 0x100, _outSmplRate);
+			Resmpl_SetVals(&clDev->resmpl, resmplMode, 0x100, _outSmplRate);
 			// do DualOPL2 hard panning by muting either the left or right speaker
 			if (_devPanning[curDev] & 0x02)
 				clDev->resmpl.volumeL = 0x00;

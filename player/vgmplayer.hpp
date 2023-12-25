@@ -65,6 +65,7 @@ public:
 		UINT8 chipID;
 		UINT32 flags;
 		size_t optID;
+		size_t cfgID;
 		DEVFUNC_WRITE_A8D8 write8;		// write 8-bit data to 8-bit register/offset
 		DEVFUNC_WRITE_A16D8 writeM8;	// write 8-bit data to 16-bit memory offset
 		DEVFUNC_WRITE_A8D16 writeD16;	// write 16-bit data to 8-bit register/offset
