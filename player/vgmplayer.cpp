@@ -1099,7 +1099,10 @@ UINT16 VGMPlayer::GetChipVolume(UINT8 chipType, UINT8 chipID, UINT8 isLinked) co
 		}
 	}
 	
-	if (chipType == 0x1C)	// C140/C219
+	// additional patches for adjusted volume scale in sound cores
+	if (chipType == 0x19)	// K051649
+		vol = vol * 8 / 5;
+	else if (chipType == 0x1C)	// C140/C219
 		vol = (vol * 2 + 1) / 3;
 	return vol;
 }

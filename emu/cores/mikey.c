@@ -656,13 +656,15 @@ static UINT8 mikey_start( const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf )
 
   mikey_pimpl_MikeyPimpl( &mikey->mMikey );
   mikey_action_queue_ActionQueue( &mikey->mQueue );
+  //mikey->mSampleRate = cfg->clock / 16;	// TODO: This would be very demanding on the CPU. Is the quality improvement worth it?
   mikey->mSampleRate = cfg->smplRate;
+  SRATE_CUSTOM_HIGHEST(cfg->srMode, mikey->mSampleRate, cfg->smplRate);
   mikey->mTicksPerSample1 = 16000000 / mikey->mSampleRate;
   mikey->mTicksPerSample2 = 16000000 % mikey->mSampleRate;
   selectPOPCNT();
 
   mikey->devData.chipInf = (void*)mikey;
-  INIT_DEVINF( retDevInf, &mikey->devData, cfg->smplRate, &devDef );
+  INIT_DEVINF( retDevInf, &mikey->devData, mikey->mSampleRate, &devDef );
   return 0x00;
 }
 
