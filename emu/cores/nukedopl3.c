@@ -550,7 +550,11 @@ INLINE void OPL3_EnvelopeKeyOn(opl3_slot *slot, uint8_t type)
     slot->key |= type;
 #ifndef NOPL_ENABLE_WRITEBUF
     if (slot->key && slot->eg_gen != envelope_gen_num_attack)
+    {
         OPL3_EnvelopeCalc(slot);    /* hack to make key off+on at the sample sample work */
+        if (slot->pg_reset)
+            slot->pg_phase = 0;
+    }
 #endif
 }
 
@@ -1435,7 +1439,7 @@ void NOPL3_Reset(opl3_chip *chip, uint32_t clock, uint32_t samplerate)
     chip->writebuf_samplecnt = 0;
     chip->writebuf_cur = chip->writebuf_last = 0;
     chip->writebuf_lasttime = 0;
-    memset(chip->writebuf, 0x00, sizeof(nopl3_writebuf) * NOPL_WRITEBUF_SIZE);
+    memset(chip->writebuf, 0x00, sizeof(opl3_writebuf) * OPL_WRITEBUF_SIZE);
 #endif
 }
 
@@ -1646,7 +1650,11 @@ void nukedopl3_write(void *chip, UINT8 a, UINT8 v)
 		break;
 	case 1:
 	case 3:
+#ifdef NOPL_ENABLE_WRITEBUF
+		NOPL3_WriteRegBuffered(opl3, opl3->address, v);
+#else
 		NOPL3_WriteReg(opl3, opl3->address, v);
+#endif
 		break;
 	case 2:
 		opl3->address = v | 0x100;
@@ -1706,6 +1714,32 @@ void nukedopl3_update(void *chip, UINT32 samples, DEV_SMPL **out)
 		// Speed hack for possibly unused FM-part of OPL4 chip
 		memset(out[0], 0, samples * sizeof(DEV_SMPL));
 		memset(out[1], 0, samples * sizeof(DEV_SMPL));
+#ifdef NOPL_ENABLE_WRITEBUF
+		// make sure that the enqueued register writes get processed properly
+		if (opl3->rateratio == (1 << RSM_FRAC))
+		{
+			for( i=0; i < samples ; i++ )
+			{
+				if (!(opl3->writebuf[opl3->writebuf_cur].reg & 0x200))
+					break;
+				NOPL3_Generate4Ch(opl3, opl3->samples);
+			}
+		}
+		else
+		{
+			opl3->samplecnt += samples << RSM_FRAC;
+			while(opl3->samplecnt >= opl3->rateratio)
+			{
+				if (!(opl3->writebuf[opl3->writebuf_cur].reg & 0x200))
+				{
+					opl3->samplecnt = 0;
+					break;
+				}
+				NOPL3_Generate4Ch(opl3, opl3->samples);
+				opl3->samplecnt -= opl3->rateratio;
+			}
+		}
+#endif
 		return;
 	}
 

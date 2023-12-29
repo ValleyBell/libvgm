@@ -48,7 +48,7 @@ extern "C" {
 #define OPL_ENABLE_STEREOEXT 0
 #endif
 
-//#define NOPL_ENABLE_WRITEBUF
+#define NOPL_ENABLE_WRITEBUF
 
 #define OPL_WRITEBUF_SIZE   1024
 #define OPL_WRITEBUF_DELAY  2
