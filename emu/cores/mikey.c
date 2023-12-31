@@ -56,7 +56,9 @@ const DEV_DEF* devDefList_Mikey[] =
 
 #if defined( _MSC_VER )
 
+#if _MSC_VER >= 1400
 #include <intrin.h>
+#endif
 
 static uint32_t popcnt_generic( uint32_t x )
 {
@@ -69,7 +71,7 @@ static uint32_t popcnt_generic( uint32_t x )
   return v;
 }
 
-#if defined( _M_IX86 ) || defined( _M_X64 )
+#if (_MSC_VER >= 1400) && (defined( _M_IX86 ) || defined( _M_X64 ))
 
 static uint32_t popcnt_intrinsic( uint32_t x )
 {
@@ -119,10 +121,13 @@ static void selectPOPCNT(void)
 #ifndef INT8_MIN
 #define INT8_MIN         (-0x80)
 #define INT8_MAX         0x7F
+#ifdef _MSC_VER
+#define INT64_MAX        0x7FFFFFFFFFFFFFFFuI64
+#else
 #define INT64_MAX        0x7FFFFFFFFFFFFFFFull
 #endif
+#endif
 
-//static const int64_t CNT_MAX = std::numeric_limits<int64_t>::max() & ~15;
 #define CNT_MAX (INT64_MAX & ~15)
 
 static int32_t clamp_i32( int32_t v, int32_t lo, int32_t hi )
@@ -223,7 +228,7 @@ static uint8_t mikey_timer_getCount( mikey_timer_t* timer, int64_t tick )
 //mikey_timer_t private:
 static uint64_t mikey_timer_scaleDiff( const mikey_timer_t* timer, uint64_t older, uint64_t newer )
 {
-  uint64_t const mask = ~0ull << ( timer->mAudShift + 4 );
+  uint64_t const mask = ~(uint64_t)0 << ( timer->mAudShift + 4 );
   return ( ( newer & mask ) - ( older & mask ) ) >> ( timer->mAudShift + 4 );
 }
 
@@ -242,7 +247,7 @@ static int64_t mikey_timer_computeTriggerTime( mikey_timer_t* timer, int64_t tic
   if ( timer->mEnableCount && timer->mValue != 0 )
   {
     //tick value is increased by multipy of 16 (1 MHz resolution) lower bits are unchanged
-    return tick + ( 1ull + timer->mValue ) * ( 1ull << ( timer->mAudShift + 4 ) );
+    return tick + (uint64_t)( 1 + timer->mValue ) * (uint64_t)( 1 << ( timer->mAudShift + 4 ) );
   }
   else
   {
@@ -572,7 +577,7 @@ static int64_t mikey_pimpl_write( mikey_pimpl_t* mikey, int64_t tick, uint8_t ad
 
 static int64_t mikey_pimpl_fireTimer( mikey_pimpl_t* mikey, int64_t tick )
 {
-  size_t timer = tick & 3;
+  size_t timer = (size_t)(tick & 3);
   mikey->mSampleValid = false;
   return mikey_audio_channel_fireAction( &mikey->mAudioChannels[timer], tick );
 }
