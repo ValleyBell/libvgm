@@ -572,8 +572,8 @@ static int64_t mikey_pimpl_write( mikey_pimpl_t* mikey, int64_t tick, uint8_t ad
 
 static int64_t mikey_pimpl_fireTimer( mikey_pimpl_t* mikey, int64_t tick )
 {
-  mikey->mSampleValid = false;
   size_t timer = tick & 3;
+  mikey->mSampleValid = false;
   return mikey_audio_channel_fireAction( &mikey->mAudioChannels[timer], tick );
 }
 
@@ -656,8 +656,7 @@ static UINT8 mikey_start( const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf )
 
   mikey_pimpl_MikeyPimpl( &mikey->mMikey );
   mikey_action_queue_ActionQueue( &mikey->mQueue );
-  //mikey->mSampleRate = cfg->clock / 16;	// TODO: This would be very demanding on the CPU. Is the quality improvement worth it?
-  mikey->mSampleRate = cfg->smplRate;
+  mikey->mSampleRate = cfg->clock / 16;
   SRATE_CUSTOM_HIGHEST(cfg->srMode, mikey->mSampleRate, cfg->smplRate);
   mikey->mTicksPerSample1 = 16000000 / mikey->mSampleRate;
   mikey->mTicksPerSample2 = 16000000 % mikey->mSampleRate;
@@ -712,9 +711,9 @@ static void mikey_update( void* info, UINT32 samples, DEV_SMPL** outputs )
       mikey->mTick = mikey->mNextTick & ~15;
       mikey->mNextTick = mikey->mNextTick + mikey->mTicksPerSample1;
       mikey->mSamplesRemainder += mikey->mTicksPerSample2;
-      if ( mikey->mSamplesRemainder > mikey->mSampleRate )
+      if ( mikey->mSamplesRemainder >= mikey->mSampleRate )
       {
-        mikey->mSamplesRemainder %= mikey->mSampleRate;
+        mikey->mSamplesRemainder -= mikey->mSampleRate;
         mikey->mNextTick += 1;
       }
 
@@ -722,8 +721,10 @@ static void mikey_update( void* info, UINT32 samples, DEV_SMPL** outputs )
         return;
     }
 
-    int64_t newAction = mikey_pimpl_fireTimer( &mikey->mMikey, value );
-    mikey_action_queue_push( &mikey->mQueue, newAction );
+    {
+      int64_t newAction = mikey_pimpl_fireTimer( &mikey->mMikey, value );
+      mikey_action_queue_push( &mikey->mQueue, newAction );
+    }
   }
 }
 
