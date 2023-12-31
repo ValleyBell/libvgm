@@ -192,8 +192,8 @@ double PlayerA::GetPlaybackSpeed(void) const
 void PlayerA::SetPlaybackSpeed(double speed)
 {
 	_config.pbSpeed = speed;
-	if (_player != NULL)
-		_player->SetPlaybackSpeed(_config.pbSpeed);
+	for (size_t curPlr = 0; curPlr < _avbPlrs.size(); curPlr++)
+		_avbPlrs[curPlr]->SetSampleRate(_smplRate);
 	return;
 }
 
@@ -257,8 +257,9 @@ void PlayerA::SetConfiguration(const PlayerA::Config& config)
 	double oldPbSpeed = _config.pbSpeed;
 	
 	_config = config;
-	if (_player != NULL && oldPbSpeed != _config.pbSpeed)
-		_player->SetPlaybackSpeed(_config.pbSpeed);
+	SetMasterVolume(_config.masterVol);
+	if (oldPbSpeed != _config.pbSpeed)
+		SetPlaybackSpeed(_config.pbSpeed);	// refresh in all players
 	return;
 }
 
@@ -388,6 +389,10 @@ UINT8 PlayerA::LoadFile(DATA_LOADER* dLoad)
 	FindPlayerEngine();
 	if (_player == NULL)
 		return 0xFF;
+	
+	// set the configuration so that the configuration is loaded properly
+	_player->SetSampleRate(_smplRate);
+	_player->SetPlaybackSpeed(_config.pbSpeed);
 	
 	UINT8 retVal = _player->LoadFile(dLoad);
 	if (retVal >= 0x80)
