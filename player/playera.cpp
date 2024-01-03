@@ -193,7 +193,7 @@ void PlayerA::SetPlaybackSpeed(double speed)
 {
 	_config.pbSpeed = speed;
 	for (size_t curPlr = 0; curPlr < _avbPlrs.size(); curPlr++)
-		_avbPlrs[curPlr]->SetSampleRate(_smplRate);
+		_avbPlrs[curPlr]->SetPlaybackSpeed(_config.pbSpeed);
 	return;
 }
 
