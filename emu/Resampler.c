@@ -153,12 +153,15 @@ void Resmpl_ChangeRate(void* DataPtr, UINT32 newSmplRate)
 // I recommend 11 bits as it's fast and accurate
 #define FIXPNT_BITS		11
 #define FIXPNT_FACT		(1 << FIXPNT_BITS)
-#if (FIXPNT_BITS <= 11)
+#if (FIXPNT_BITS <= 11)	// allows for chip sample rates of about 10 MHz without overflow
 	typedef UINT32	SLINT;	// 32-bit is a lot faster
+	#define SLI_BITS	32
 #else
 	typedef UINT64	SLINT;
+	#define SLI_BITS	64
 #endif
 #define FIXPNT_MASK		(FIXPNT_FACT - 1)
+#define FIXPNT_OFLW_BIT	(SLI_BITS - FIXPNT_BITS)
 
 #define getfraction(x)	((x) & FIXPNT_MASK)
 #define getnfraction(x)	((FIXPNT_FACT - (x)) & FIXPNT_MASK)
@@ -262,7 +265,7 @@ static void Resmpl_Exec_LinearUp(RESMPL_STATE* CAA, UINT32 length, WAVE_32BS* re
 	INT32 SmpCnt;	// must be signed, else I'm getting calculation errors
 	UINT64 ChipSmpRateFP;
 	
-	ChipSmpRateFP = FIXPNT_FACT * CAA->smpRateSrc;
+	ChipSmpRateFP = FIXPNT_FACT * (UINT64)CAA->smpRateSrc;
 	// TODO: Make it work *properly* with large blocks. (this is very hackish)
 	for (OutPos = 0; OutPos < length; OutPos ++)
 	{
@@ -372,9 +375,18 @@ static void Resmpl_Exec_LinearDown(RESMPL_STATE* CAA, UINT32 length, WAVE_32BS* 
 	INT32 SmpCnt;	// must be signed, else I'm getting calculation errors
 	UINT64 ChipSmpRateFP;
 	
-	ChipSmpRateFP = FIXPNT_FACT * CAA->smpRateSrc;
+	ChipSmpRateFP = FIXPNT_FACT * (UINT64)CAA->smpRateSrc;
 	InPosL = (SLINT)((CAA->smpP + length) * ChipSmpRateFP / CAA->smpRateDst);
 	CAA->smpNext = (UINT32)fp2i_ceil(InPosL);
+#if FIXPNT_OFLW_BIT < 32
+	if (CAA->smpNext < CAA->smpLast)
+	{
+		// work around overflow in InPosL (may happen with extremely high chip sample rates)
+		CAA->smpNext |= CAA->smpLast & ~(((UINT32)1 << FIXPNT_OFLW_BIT) - 1);
+		if (CAA->smpNext < CAA->smpLast)
+			CAA->smpNext += ((UINT32)1 << FIXPNT_OFLW_BIT);
+	}
+#endif
 	
 	Resmpl_EnsureBuffers(CAA, CAA->smpNext - CAA->smpLast + 1);
 	CurBufL = CAA->smplBufs[0];
