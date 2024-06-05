@@ -1875,32 +1875,23 @@ void VGMPlayer::ParseFileForFMClocks()
 
 		switch (curCmd)
 		{
-		case 0x66: // end
+		case 0x66: // end of command data
 			return;
-
-		case 0x50: // PSG
-		case 0x63: // byte delay
-			filePos += 2;
-			break;
-
-		case 0x61: // delay
-			filePos += 3;
-			break;
 
 		case 0x67: // data block
 			filePos += 7 + ReadLE32(&_fileData[filePos + 3]);
 			break;
 
-		case 0x51: // YM2413
+		case 0x51: // YM2413 register write
 			return;
 
-		case 0x52: // YM2612 port 0
-		case 0x53: // YM2612 port 1
+		case 0x52: // YM2612 register write, port 0
+		case 0x53: // YM2612 register write, port 1
 			_v101ym2612clock = _v101ym2413clock;
 			_v101ym2413clock = 0;
 			return;
 
-		case 0x54: // YM2151
+		case 0x54: // YM2151 register write
 			_v101ym2151clock = _v101ym2413clock;
 			_v101ym2413clock = 0;
 			return;
