@@ -4,7 +4,7 @@
 #include <stdlib.h>
 
 #include "../../stdtype.h"
-#include "../../stdbool.h"
+#include "../../_stdbool.h"
 #include "emutypes.h"
 #include "../snddef.h"
 #include "../EmuStructs.h"

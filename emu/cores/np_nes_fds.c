@@ -7,7 +7,7 @@
 #include <math.h>	// for exp
 
 #include "../../stdtype.h"
-#include "../../stdbool.h"
+#include "../../_stdbool.h"
 #include "../snddef.h"
 #include "../RatioCntr.h"
 #include "np_nes_fds.h"

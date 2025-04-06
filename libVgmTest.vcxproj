@@ -166,7 +166,7 @@
     <ClInclude Include="player\playerbase.hpp" />
     <ClInclude Include="player\s98player.hpp" />
     <ClInclude Include="player\vgmplayer.hpp" />
-    <ClInclude Include="stdbool.h" />
+    <ClInclude Include="_stdbool.h" />
     <ClInclude Include="stdtype.h" />
     <ClInclude Include="utils\StrUtils.h" />
   </ItemGroup>

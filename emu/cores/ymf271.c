@@ -29,7 +29,7 @@
 #include <math.h>
 
 #include "../../stdtype.h"
-#include "../../stdbool.h"
+#include "../../_stdbool.h"
 #include "../EmuStructs.h"
 #include "../EmuCores.h"
 #include "../snddef.h"
