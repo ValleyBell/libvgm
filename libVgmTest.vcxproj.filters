@@ -18,7 +18,7 @@
     <ClInclude Include="common_def.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
-    <ClInclude Include="stdbool.h">
+    <ClInclude Include="_stdbool.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
     <ClInclude Include="stdtype.h">

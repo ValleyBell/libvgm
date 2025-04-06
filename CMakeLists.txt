@@ -219,7 +219,7 @@ endif(BUILD_VGM2WAV)
 
 set(COMMON_HEADERS
 	common_def.h
-	stdbool.h
+	_stdbool.h
 	stdtype.h
 )
 

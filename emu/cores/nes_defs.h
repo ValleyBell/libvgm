@@ -23,7 +23,7 @@
 #define __NES_DEFS_H__
 
 #include "../../stdtype.h"
-#include "../../stdbool.h"
+#include "../../_stdbool.h"
 
 /* REGULAR TYPE DEFINITIONS */
 typedef INT8          int8;

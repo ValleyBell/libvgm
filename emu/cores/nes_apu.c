@@ -43,7 +43,7 @@
 #include <stddef.h>	// for NULL
 
 #include "../../stdtype.h"
-#include "../../stdbool.h"
+#include "../../_stdbool.h"
 #include "../../common_def.h"
 #include "../snddef.h"
 #include "../panning.h"
