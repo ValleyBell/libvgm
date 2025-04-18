@@ -70,7 +70,7 @@
 	{0xFF, 0x00, &VGMPlayer::Cmd_invalid},              // 2F
 	{0x00, 0x02, &VGMPlayer::Cmd_SN76489},              // 30 SN76489 register write (2nd chip)
 	{0xFF, 0x02, &VGMPlayer::Cmd_AY_Stereo},            // 31 AY8910 stereo mask [chip type depends on data]
-	{0xFF, 0x02, &VGMPlayer::Cmd_unknown},              // 32
+	{0x2B, 0x02, &VGMPlayer::Cmd_Ofs8_Data8},           // 32 MSM5205
 	{0xFF, 0x02, &VGMPlayer::Cmd_unknown},              // 33
 	{0xFF, 0x02, &VGMPlayer::Cmd_unknown},              // 34
 	{0xFF, 0x02, &VGMPlayer::Cmd_unknown},              // 35
@@ -85,7 +85,7 @@
 	{0xFF, 0x02, &VGMPlayer::Cmd_unknown},              // 3E
 	{0x00, 0x02, &VGMPlayer::Cmd_GGStereo},             // 3F GameGear stereo mask (2nd chip)
 	{0x29, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // 40 Mikey register write
-	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 41
+	{0x2A, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // 41 K007232 register write
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 42
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 43
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 44
@@ -221,7 +221,7 @@
 	{0x21, 0x04, &VGMPlayer::Cmd_Ofs16_Data8},          // C6 WonderSwan memory write
 	{0x22, 0x04, &VGMPlayer::Cmd_Ofs16_Data8},          // C7 VSU-VUE (Virtual Boy) register write
 	{0x26, 0x04, &VGMPlayer::Cmd_Ofs16_Data8},          // C8 X1-010 register write
-	{0xFF, 0x04, &VGMPlayer::Cmd_unknown},              // C9
+	{0x2C, 0x04, &VGMPlayer::Cmd_Ofs16_Data8},          // C9 BSMT2000 register write
 	{0xFF, 0x04, &VGMPlayer::Cmd_unknown},              // CA
 	{0xFF, 0x04, &VGMPlayer::Cmd_unknown},              // CB
 	{0xFF, 0x04, &VGMPlayer::Cmd_unknown},              // CC
@@ -288,7 +288,7 @@
 	0x1B,	// 05 HuC6280
 	0x20,	// 06 SCSP
 	0x14,	// 07 NES APU
-	0xFF,	// 08
+	0x2B,	// 08 MSM5205
 	0xFF,	// 09
 	0xFF,	// 0A
 	0xFF,	// 0B
@@ -369,8 +369,8 @@
 	{0x26, 0},	// 91 X1-010
 	{0x27, 0},	// 92 C352
 	{0x28, 0},	// 93 GA20
-	{0xFF, 0},	// 94
-	{0xFF, 0},	// 95
+	{0x2A, 0},	// 94 K007232
+	{0x2C, 0},	// 95 BSMT2000
 	{0xFF, 0},	// 96
 	{0xFF, 0},	// 97
 	{0xFF, 0},	// 98
