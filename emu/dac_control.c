@@ -180,10 +180,12 @@ INLINE void daccontrol_SendCommand(dac_control* chip)
 	case DEVID_uPD7759:
 	case DEVID_OKIM6258:
 	case DEVID_K053260:	// TODO: Verify
+	case DEVID_K007232:	// TODO: Verify
 	case DEVID_POKEY:
 	case DEVID_ES5503:
 	case DEVID_GA20:	// TODO: Verify
 	case DEVID_MIKEY:
+	case DEVID_MSM5205:
 		if (chip->Write.A8D8 == NULL)
 			return;
 		Command = (chip->DstCommand & 0x00FF) >> 0;
@@ -273,6 +275,12 @@ INLINE void daccontrol_SendCommand(dac_control* chip)
 		Data = ChipData[0x00];
 		chip->Write.A8D8(chip->chipData, 1, Command);
 		chip->Write.A8D8(chip->chipData, 0, Data);
+		break;
+	case DEVID_BSMT2000:	// 8-bit Register, 16-bit Data
+		if (chip->Write.A16D8 == NULL)
+			return;
+		Data = ChipData[0x00];
+		chip->Write.A16D8(chip->chipData, chip->DstCommand, Data);
 		break;
 	//case DEVID_YMW258:	// TODO
 	}
@@ -421,7 +429,11 @@ void daccontrol_setup_chip(void* info, DEV_INFO* devInf, UINT8 ChType, UINT16 Co
 		chip->CmdSize = 0x01;
 		break;
 	case DEVID_32X_PWM:
+	case DEVID_BSMT2000:
 	case DEVID_QSOUND:
+		chip->CmdSize = 0x02;
+		break;
+	case DEVID_MSM5205:
 		chip->CmdSize = 0x02;
 		break;
 	default:

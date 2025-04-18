@@ -51,6 +51,8 @@
 #define SNDDEV_GA20
 #define SNDDEV_MIKEY
 #define SNDDEV_K007232
+#define SNDDEV_MSM5205
+#define SNDDEV_BSMT2000
 #endif
 
 #ifdef SNDDEV_SN76496
@@ -170,6 +172,13 @@
 #ifdef SNDDEV_K007232
 #include "cores/k007232.h"
 #endif
+#ifdef SNDDEV_MSM5205
+#include "cores/msm5205.h"
+#endif
+#ifdef SNDDEV_BSMT2000
+#include "cores/bsmt2000.h"
+#endif
+
 
 const DEV_DEF** SndEmu_GetDevDefList(UINT8 deviceID)
 {
@@ -346,6 +355,14 @@ const DEV_DEF** SndEmu_GetDevDefList(UINT8 deviceID)
 #ifdef SNDDEV_K007232
 	case DEVID_K007232:
 		return devDefList_K007232;
+#endif
+#ifdef SNDDEV_MSM5205
+	case DEVID_MSM5205:
+		return devDefList_MSM5205;
+#endif
+#ifdef SNDDEV_BSMT2000
+	case DEVID_BSMT2000:
+		return devDefList_BSMT2000;
 #endif
 	default:
 		return NULL;
@@ -683,9 +700,17 @@ const char* SndEmu_GetDevName(UINT8 deviceID, UINT8 opts, const DEV_GEN_CFG* dev
 	case DEVID_MIKEY:
 		return "MIKEY";
 #endif
-#ifdef SNDDEV_K054539
-	case DEVID_K054539:
-		return "K054539";
+#ifdef SNDDEV_K007232
+	case DEVID_K007232:
+		return "K007232";
+#endif
+#ifdef SNDDEV_MSM5205
+	case DEVID_MSM5205:
+		return "MSM5205";
+#endif
+#ifdef SNDDEV_BSMT2000
+	case DEVID_BSMT2000:
+		return "BSMT2000";
 #endif
 	default:
 		return NULL;
