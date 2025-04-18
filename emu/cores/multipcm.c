@@ -128,6 +128,7 @@ typedef struct
 {
 	INT32 volume;
 	state_t state;
+	UINT8 reverb;
 	INT32 step;
 	//step vals
 	INT32 attack_rate;  // Attack
@@ -147,22 +148,26 @@ typedef struct
 
 typedef struct
 {
-	UINT8 slot_index;
 	UINT8 regs[8];
 	UINT8 playing;
 	sample_t sample;
 	UINT32 base;
 	UINT32 offset;
+	UINT8 octave;
+	UINT16 pitch;
 	UINT32 step;
+	UINT8 reverse;
 	UINT32 pan;
 	UINT32 total_level;
 	UINT32 dest_total_level;
 	INT32 total_level_step;
 	INT32 prev_sample;
 	envelope_gen_t envelope_gen;
+	UINT8 lfo_frequency;
 	lfo_t pitch_lfo; // Pitch lfo
+	UINT8 vibrato;
 	lfo_t amplitude_lfo; // AM lfo
-	UINT8 format;
+	UINT8 tremolo;
 	
 	UINT8 muted;
 } slot_t;
@@ -240,7 +245,6 @@ static const double BASE_TIMES[64] = {
 	0.45,       0.45,       0.45,       0.45
 };
 
-#define attack_rate_to_decay_rate   14.32833
 static INT32 linear_to_exp_volume[0x400];
 
 #define TL_SHIFT    12
@@ -254,7 +258,7 @@ static void init_sample(MultiPCM *ptChip, sample_t *sample, UINT16 index)
 	sample->format = (sample->start>>20) & 0xfe;
 	sample->start &= 0x3fffff;
 	sample->loop = (ptChip->ROM[address + 3] << 8) | ptChip->ROM[address + 4];
-	sample->end = 0xffff - ((ptChip->ROM[address + 5] << 8) | ptChip->ROM[address + 6]);
+	sample->end = 0x10000 - ((ptChip->ROM[address + 5] << 8) | ptChip->ROM[address + 6]);
 	sample->attack_reg = (ptChip->ROM[address + 8] >> 4) & 0xf;
 	sample->decay1_reg = ptChip->ROM[address + 8] & 0xf;
 	sample->decay2_reg = ptChip->ROM[address + 9] & 0xf;
@@ -277,77 +281,136 @@ static void retrigger_sample(MultiPCM *ptChip, slot_t *slot)
 	slot->envelope_gen.volume = 0;
 }
 
-static INT32 envelope_generator_update(slot_t *slot)
+static void update_step(MultiPCM *ptChip, slot_t *slot)
+{
+	const UINT8 oct = (slot->octave - 1) & 0xf;
+	UINT32 pitch = ptChip->freq_step_table[slot->pitch];
+	if (oct & 0x8)
+	{
+		pitch >>= (16 - oct);
+	}
+	else
+	{
+		pitch <<= oct;
+	}
+	slot->step = pitch / ptChip->rate;
+}
+
+static void envelope_generator_init(MultiPCM *ptChip, const double rates[64], double attack_decay_ratio)
+{
+	INT32 i;
+	for (i = 4; i < 0x40; ++i)
+	{
+		// Times are based on 44100Hz clock, adjust to real chip clock
+		ptChip->attack_step[i] = (float)(0x400 << EG_SHIFT) / (float)(rates[i] * 44100.0 / 1000.0);
+		ptChip->decay_release_step[i] = (float)(0x400 << EG_SHIFT) / (float)(rates[i] * attack_decay_ratio * 44100.0 / 1000.0);
+	}
+	ptChip->attack_step[0] = ptChip->attack_step[1] = ptChip->attack_step[2] = ptChip->attack_step[3] = 0;
+	ptChip->attack_step[0x3f] = 0x400 << EG_SHIFT;
+	ptChip->decay_release_step[0] = ptChip->decay_release_step[1] = ptChip->decay_release_step[2] = ptChip->decay_release_step[3] = 0;
+}
+
+static INT32 envelope_generator_update(MultiPCM *ptChip, slot_t *slot)
 {
 	switch(slot->envelope_gen.state)
 	{
-		case ATTACK:
-			slot->envelope_gen.volume += slot->envelope_gen.attack_rate;
-			if (slot->envelope_gen.volume >= (0x3ff << EG_SHIFT))
+	case ATTACK:
+		slot->envelope_gen.volume += slot->envelope_gen.attack_rate;
+		if (slot->envelope_gen.volume >= (0x3ff << EG_SHIFT))
+		{
+			slot->envelope_gen.state = DECAY1;
+			if (slot->envelope_gen.decay1_rate >= (0x400 << EG_SHIFT)) //Skip DECAY1, go directly to DECAY2
 			{
-				slot->envelope_gen.state = DECAY1;
-				if (slot->envelope_gen.decay1_rate >= (0x400 << EG_SHIFT)) //Skip DECAY1, go directly to DECAY2
-					slot->envelope_gen.state = DECAY2;
-				slot->envelope_gen.volume = 0x3ff << EG_SHIFT;
-			}
-			break;
-		case DECAY1:
-			slot->envelope_gen.volume -= slot->envelope_gen.decay1_rate;
-			if (slot->envelope_gen.volume <= 0)
-				slot->envelope_gen.volume = 0;
-			if (slot->envelope_gen.volume >> EG_SHIFT <= (slot->envelope_gen.decay_level << 6))
 				slot->envelope_gen.state = DECAY2;
-			break;
-		case DECAY2:
-			slot->envelope_gen.volume -= slot->envelope_gen.decay2_rate;
-			if (slot->envelope_gen.volume <= 0)
-				slot->envelope_gen.volume = 0;
-			break;
-		case RELEASE:
-			slot->envelope_gen.volume -= slot->envelope_gen.release_rate;
-			if (slot->envelope_gen.volume <= 0)
-			{
-				slot->envelope_gen.volume = 0;
-				slot->playing = 0;
 			}
-			break;
-		default:
-			return 1 << TL_SHIFT;
+			slot->envelope_gen.volume = 0x3ff << EG_SHIFT;
+		}
+		break;
+	case DECAY1:
+		slot->envelope_gen.volume -= slot->envelope_gen.decay1_rate;
+		if (slot->envelope_gen.volume <= 0)
+		{
+			slot->envelope_gen.volume = 0;
+		}
+		if (slot->envelope_gen.volume >> (EG_SHIFT + 6) <= slot->envelope_gen.decay_level)
+		{
+			slot->envelope_gen.state = DECAY2;
+		}
+		break;
+	case DECAY2:
+		slot->envelope_gen.volume -= slot->envelope_gen.decay2_rate;
+		if (slot->envelope_gen.volume <= 0)
+		{
+			slot->envelope_gen.volume = 0;
+		}
+		break;
+	case RELEASE:
+		slot->envelope_gen.volume -= slot->envelope_gen.release_rate;
+		if (slot->envelope_gen.volume <= 0)
+		{
+			slot->envelope_gen.volume = 0;
+			slot->playing = 0;
+		}
+		break;
+	default:
+		return 1 << TL_SHIFT;
+	}
+
+	// TODO: this is currently only implemented for GEW7, it's probably not accurate
+	if (slot->envelope_gen.reverb && slot->envelope_gen.state != ATTACK
+		&& (slot->envelope_gen.volume >> EG_SHIFT) <= 0x300)
+	{
+		slot->envelope_gen.decay1_rate  = ptChip->decay_release_step[17];
+		slot->envelope_gen.decay2_rate  = ptChip->decay_release_step[17];
+		slot->envelope_gen.release_rate = ptChip->decay_release_step[17];
 	}
 
 	return linear_to_exp_volume[slot->envelope_gen.volume >> EG_SHIFT];
 }
 
-INLINE UINT32 get_rate(const UINT32 *steps, UINT32 rate, UINT32 val)
+INLINE UINT32 get_rate(const UINT32 *steps, INT32 rate, UINT32 val)
 {
-	INT32 r = 4 * val + rate;
+	int r;
 	if (val == 0)
+	{
 		return steps[0];
+	}
 	if (val == 0xf)
+	{
 		return steps[0x3f];
-	if (r > 0x3f)
+	}
+	r = 4 * val + rate;
+	if (r < 0)
+		r = 0;
+	else if (r > 0x3f)
 		r = 0x3f;
 	return steps[r];
 }
 
 static void envelope_generator_calc(MultiPCM *ptChip, slot_t *slot)
 {
-	INT32 octave = ((slot->regs[3] >> 4) - 1) & 0xf;
+	INT32 octave = slot->octave;
 	INT32 rate;
 	if (octave & 8)
+	{
 		octave = octave - 16;
+	}
 
 	if (slot->sample.key_rate_scale != 0xf)
-		rate = (octave + slot->sample.key_rate_scale) * 2 + ((slot->regs[3] >> 3) & 1);
+	{
+		rate = (octave + slot->sample.key_rate_scale) * 2 + ((slot->pitch >> 9) & 1);
+	}
 	else
+	{
 		rate = 0;
+	}
 
 	slot->envelope_gen.attack_rate = get_rate(ptChip->attack_step, rate, slot->sample.attack_reg);
 	slot->envelope_gen.decay1_rate = get_rate(ptChip->decay_release_step, rate, slot->sample.decay1_reg);
 	slot->envelope_gen.decay2_rate = get_rate(ptChip->decay_release_step, rate, slot->sample.decay2_reg);
 	slot->envelope_gen.release_rate = get_rate(ptChip->decay_release_step, rate, slot->sample.release_reg);
 	slot->envelope_gen.decay_level = 0xf - slot->sample.decay_level;
-
+	slot->envelope_gen.reverb = 0;
 }
 
 /*****************************
@@ -412,18 +475,30 @@ static void lfo_init(void)
 	for (i = 0; i < 256; ++i)
 	{
 		if (i < 64)
+		{
 			pitch_table[i] = i * 2 + 128;
+		}
 		else if (i < 128)
+		{
 			pitch_table[i] = 383 - i * 2;
+		}
 		else if (i < 192)
+		{
 			pitch_table[i] = 384 - i * 2;
+		}
 		else
+		{
 			pitch_table[i] = i * 2 - 383;
+		}
 
 		if (i < 128)
+		{
 			amplitude_table[i] = 255 - (i * 2);
+		}
 		else
+		{
 			amplitude_table[i] = (i * 2) - 256;
+		}
 	}
 
 	for (table = 0; table < 8; ++table)
@@ -480,203 +555,6 @@ INLINE void lfo_compute_step(MultiPCM *ptChip, lfo_t *lfo, UINT8 lfo_frequency, 
 	}
 }
 
-static void write_slot(MultiPCM *ptChip, slot_t *slot, INT32 reg, UINT8 data)
-{
-	slot->regs[reg] = data;
-
-	switch(reg)
-	{
-		case 0: // PANPOT
-			slot->pan = (data >> 4) & 0xf;
-			break;
-		case 1: // Sample
-			// according to YMF278 sample write causes some base params written to the regs (envelope+lfos)
-			init_sample(ptChip, &slot->sample, slot->regs[1] | ((slot->regs[2] & 1) << 8));
-			write_slot(ptChip, slot, 6, slot->sample.lfo_vibrato_reg);
-			write_slot(ptChip, slot, 7, slot->sample.lfo_amplitude_reg);
-
-			slot->format = slot->sample.format;
-			slot->base = slot->sample.start;
-			if (ptChip->sega_banking)
-			{
-				slot->base &= 0x1fffff;
-				if (slot->base & 0x100000)
-				{
-					if (slot->base & 0x080000)
-						slot->base = (slot->base & 0x07ffff) | ptChip->bank1;
-					else
-						slot->base = (slot->base & 0x07ffff) | ptChip->bank0;
-				}
-			}
-
-			// retrigger if key is on
-			if (slot->playing)
-				retrigger_sample(ptChip, slot);
-
-			break;
-		case 2: //Pitch
-		case 3:
-			{
-				UINT8 oct = ((slot->regs[3] >> 4) - 1) & 0xf;
-				UINT32 pitch = ((slot->regs[3] & 0xf) << 6) | (slot->regs[2] >> 2);
-				pitch = ptChip->freq_step_table[pitch];
-				if (oct & 0x8)
-					pitch >>= (16 - oct);
-				else
-					pitch <<= oct;
-				slot->step = pitch / ptChip->rate;
-			}
-			break;
-		case 4:     //KeyOn/Off (and more?)
-			if (data & 0x80)       //KeyOn
-			{
-				slot->playing = 1;
-				retrigger_sample(ptChip, slot);
-			}
-			else
-			{
-				if (slot->playing)
-				{
-					if (slot->sample.release_reg != 0xf)
-						slot->envelope_gen.state = RELEASE;
-					else
-						slot->playing = 0;
-				}
-			}
-			break;
-		case 5: // TL + Interpolation
-			slot->dest_total_level = (data >> 1) & 0x7f;
-			if (!(data & 1))   //Interpolate TL
-			{
-				if ((slot->total_level >> TL_SHIFT) > slot->dest_total_level)
-					slot->total_level_step = ptChip->total_level_steps[0]; // decrease
-				else
-					slot->total_level_step = ptChip->total_level_steps[1]; // increase
-			}
-			else
-			{
-				slot->total_level = slot->dest_total_level << TL_SHIFT;
-			}
-			break;
-		case 6: // LFO frequency + Pitch LFO
-			if (data)
-			{
-				lfo_compute_step(ptChip, &slot->pitch_lfo, (slot->regs[6] >> 3) & 7, slot->regs[6] & 7, 0);
-				lfo_compute_step(ptChip, &slot->amplitude_lfo, (slot->regs[6] >> 3) & 7, slot->regs[7] & 7, 1);
-			}
-			break;
-		case 7: // Amplitude LFO
-			if (data)
-			{
-				lfo_compute_step(ptChip, &slot->pitch_lfo, (slot->regs[6] >> 3) & 7, slot->regs[6] & 7, 0);
-				lfo_compute_step(ptChip, &slot->amplitude_lfo, (slot->regs[6] >> 3) & 7, slot->regs[7] & 7, 1);
-			}
-			break;
-	}
-}
-
-INLINE UINT8 read_byte(MultiPCM *ptChip, UINT32 addr)
-{
-	return ptChip->ROM[addr & ptChip->ROMMask];
-}
-
-static void MultiPCM_update(void *info, UINT32 samples, DEV_SMPL **outputs)
-{
-	MultiPCM *ptChip = (MultiPCM *)info;
-	UINT32 i, sl;
-
-	if (ptChip->ROM == NULL)
-	{
-		memset(outputs[0], 0, samples * sizeof(DEV_SMPL));
-		memset(outputs[1], 0, samples * sizeof(DEV_SMPL));
-		return;
-	}
-
-	for (i = 0; i < samples; ++i)
-	{
-		DEV_SMPL smpl = 0;
-		DEV_SMPL smpr = 0;
-		for (sl = 0; sl < 28; ++sl)
-		{
-			slot_t *slot = ptChip->slots + sl;
-			if (slot->playing && ! slot->muted)
-			{
-				UINT32 vol = (slot->total_level >> TL_SHIFT) | (slot->pan << 7);
-				UINT32 spos = slot->offset >> TL_SHIFT;
-				UINT32 step = slot->step;
-				INT32 csample;
-				INT32 fpart = slot->offset & ((1 << TL_SHIFT) - 1);
-				INT32 sample;
-
-				if (slot->format & 4)	// 12-bit linear
-				{
-					UINT32 adr = slot->base + (spos >> 1) * 3;
-					if (!(spos & 1))
-					{ // ab.c ..
-						INT16 w0 = (read_byte(ptChip, adr) << 8) | ((read_byte(ptChip, adr + 1) & 0xf) << 4);
-						csample = w0;
-						break;
-					}
-					else
-					{ // ..C. AB
-						INT16 w0 = (read_byte(ptChip, adr + 2) << 8) | (read_byte(ptChip, adr + 1) & 0xf0);
-						csample = w0;
-						break;
-					}
-				}
-				else
-				{
-					csample = (INT16)(read_byte(ptChip, slot->base + spos) << 8);
-				}
-
-				sample = (csample * fpart + slot->prev_sample * ((1 << TL_SHIFT) - fpart)) >> TL_SHIFT;
-
-				if (slot->regs[6] & 7) // Vibrato enabled
-				{
-					step = step * pitch_lfo_step(&slot->pitch_lfo);
-					step >>= TL_SHIFT;
-				}
-
-				slot->offset += step;
-				if (slot->offset >= (slot->sample.end << TL_SHIFT))
-				{
-					slot->offset = slot->sample.loop << TL_SHIFT;
-				}
-
-				if (spos ^ (slot->offset >> TL_SHIFT))
-				{
-					slot->prev_sample = csample;
-				}
-
-				if ((slot->total_level >> TL_SHIFT) != slot->dest_total_level)
-				{
-					slot->total_level += slot->total_level_step;
-				}
-
-				if (slot->regs[7] & 7) // Tremolo enabled
-				{
-					sample = sample * amplitude_lfo_step(&slot->amplitude_lfo);
-					sample >>= TL_SHIFT;
-				}
-
-				sample = (sample * envelope_generator_update(slot)) >> 10;
-
-				smpl += (left_pan_table[vol] * sample) >> TL_SHIFT;
-				smpr += (right_pan_table[vol] * sample) >> TL_SHIFT;
-			}
-		}
-
-		outputs[0][i] = smpl;
-		outputs[1][i] = smpr;
-	}
-}
-
-static UINT8 multipcm_r(void *info, UINT8 offset)
-{
-	MultiPCM *ptChip = (MultiPCM *)info;
-	return 0;
-}
-
 static UINT8 device_start_multipcm(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 {
 	MultiPCM *ptChip;
@@ -693,69 +571,73 @@ static UINT8 device_start_multipcm(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 
 	if (! IsInit)
 	{
-		INT32 level;
+	INT32 level;
 
-		IsInit = 1;
+	IsInit = 1;
 
-		// Volume + pan table
-		for (level = 0; level < 0x80; ++level)
+	// Volume + pan table
+	for (level = 0; level < 0x80; ++level)
+	{
+		const float vol_db = (float)level * (-24.0f) / 64.0f;
+		const float total_level = powf(10.0f, vol_db / 20.0f) / 4.0f;
+		INT32 pan;
+
+		for (pan = 0; pan < 0x10; ++pan)
 		{
-			const float vol_db = (float)level * (-24.0f) / 64.0f;
-			const float total_level = powf(10.0f, vol_db / 20.0f) / 4.0f;
-			INT32 pan;
-
-			for (pan = 0; pan < 0x10; ++pan)
+			float pan_left, pan_right;
+			if (pan == 0x8)
 			{
-				float pan_left, pan_right;
-				if (pan == 0x8)
+				pan_left = 0.0;
+				pan_right = 0.0;
+			}
+			else if (pan == 0x0)
+			{
+				pan_left = 1.0;
+				pan_right = 1.0;
+			}
+			else if (pan & 0x8)
+			{
+				const INT32 inverted_pan = 0x10 - pan;
+				const float pan_vol_db = (float)inverted_pan * (-12.0f) / 4.0f;
+
+				pan_left = 1.0;
+				pan_right = powf(10.0f, pan_vol_db / 20.0f);
+
+				if ((inverted_pan & 0x7) == 7)
 				{
-					pan_left = 0.0;
 					pan_right = 0.0;
 				}
-				else if (pan == 0x0)
-				{
-					pan_left = 1.0;
-					pan_right = 1.0;
-				}
-				else if (pan & 0x8)
-				{
-					const INT32 inverted_pan = 0x10 - pan;
-					const float pan_vol_db = (float)inverted_pan * (-12.0f) / 4.0f;
-
-					pan_left = 1.0;
-					pan_right = powf(10.0f, pan_vol_db / 20.0f);
-
-					if ((inverted_pan & 0x7) == 7)
-						pan_right = 0.0;
-				}
-				else
-				{
-					const float pan_vol_db = (float)pan * (-12.0f) / 4.0f;
-
-					pan_left = powf(10.0f, pan_vol_db / 20.0f);
-					pan_right = 1.0;
-
-					if ((pan & 0x7) == 7)
-						pan_left = 0.0;
-				}
-
-				left_pan_table[(pan << 7) | level] = value_to_fixed(TL_SHIFT, pan_left * total_level);
-				right_pan_table[(pan << 7) | level] = value_to_fixed(TL_SHIFT, pan_right * total_level);
 			}
-		}
+			else
+			{
+				const float pan_vol_db = (float)pan * (-12.0f) / 4.0f;
 
-		// build the linear->exponential ramps
-		for(i = 0; i < 0x400; ++i)
-		{
-			const float db = -(96.0f - (96.0f * (float)i / (float)0x400));
-			const float exp_volume = powf(10.0f, db / 20.0f);
-			linear_to_exp_volume[i] = value_to_fixed(TL_SHIFT, exp_volume);
-		}
+				pan_left = powf(10.0f, pan_vol_db / 20.0f);
+				pan_right = 1.0;
 
-		lfo_init();
+				if ((pan & 0x7) == 7)
+				{
+					pan_left = 0.0;
+				}
+			}
+
+			left_pan_table[(pan << 7) | level] = value_to_fixed(TL_SHIFT, pan_left * total_level);
+			right_pan_table[(pan << 7) | level] = value_to_fixed(TL_SHIFT, pan_right * total_level);
+		}
 	}
 
-	//Pitch steps
+	// build the linear->exponential ramps
+	for(i = 0; i < 0x400; ++i)
+	{
+		const float db = -(96.0f - (96.0f * (float)i / (float)0x400));
+		const float exp_volume = powf(10.0f, db / 20.0f);
+		linear_to_exp_volume[i] = value_to_fixed(TL_SHIFT, exp_volume);
+	}
+
+	lfo_init();
+	}
+
+	// Pitch steps
 	for (i = 0; i < 0x400; ++i)
 	{
 		const float fcent = ptChip->rate * (1024.0f + (float)i) / 1024.0f;
@@ -763,15 +645,7 @@ static UINT8 device_start_multipcm(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 	}
 
 	// Envelope steps
-	for (i = 4; i < 0x40; ++i)
-	{
-		// Times are based on 44100Hz clock, adjust to real chip clock
-		ptChip->attack_step[i] = (float)(0x400 << EG_SHIFT) / (float)(BASE_TIMES[i] * 44100.0 / 1000.0);
-		ptChip->decay_release_step[i] = (float)(0x400 << EG_SHIFT) / (float)(BASE_TIMES[i] * attack_rate_to_decay_rate * 44100.0 / 1000.0);
-	}
-	ptChip->attack_step[0] = ptChip->attack_step[1] = ptChip->attack_step[2] = ptChip->attack_step[3] = 0;
-	ptChip->attack_step[0x3f] = 0x400 << EG_SHIFT;
-	ptChip->decay_release_step[0] = ptChip->decay_release_step[1] = ptChip->decay_release_step[2] = ptChip->decay_release_step[3] = 0;
+	envelope_generator_init(ptChip, BASE_TIMES, 14.32833);
 
 	// Total level interpolation steps
 	ptChip->total_level_steps[0] = -(float)(0x80 << TL_SHIFT) / (78.2f * 44100.0f / 1000.0f); // lower
@@ -803,7 +677,6 @@ static void device_reset_multipcm(void *info)
 	
 	for (slot = 0; slot < 28; ++slot)
 	{
-		ptChip->slots[slot].slot_index = slot;
 		ptChip->slots[slot].playing = 0;
 	}
 
@@ -811,6 +684,209 @@ static void device_reset_multipcm(void *info)
 	ptChip->bank0 = ptChip->bank1 = 0x000000;
 
 	return;
+}
+
+static void write_slot(MultiPCM *ptChip, slot_t *slot, INT32 reg, UINT8 data)
+{
+	slot->regs[reg] = data;
+
+	switch(reg)
+	{
+		case 0: // PANPOT
+			slot->pan = (data >> 4) & 0xf;
+			break;
+		case 1: // Sample
+			// according to YMF278 sample write causes some base params written to the regs (envelope+lfos)
+			init_sample(ptChip, &slot->sample, slot->regs[1] | ((slot->regs[2] & 1) << 8));
+			write_slot(ptChip, slot, 6, slot->sample.lfo_vibrato_reg);
+			write_slot(ptChip, slot, 7, slot->sample.lfo_amplitude_reg);
+
+			slot->base = slot->sample.start;
+			if (ptChip->sega_banking)
+			{
+				slot->base &= 0x1fffff;
+				if (slot->base & 0x100000)
+				{
+					if (slot->base & 0x080000)
+						slot->base = (slot->base & 0x07ffff) | ptChip->bank1;
+					else
+						slot->base = (slot->base & 0x07ffff) | ptChip->bank0;
+				}
+			}
+
+			// retrigger if key is on
+			if (slot->playing)
+				retrigger_sample(ptChip, slot);
+
+			break;
+		case 2: //Pitch
+		case 3:
+			{
+				slot->octave = slot->regs[3] >> 4;
+				slot->pitch = ((slot->regs[3] & 0xf) << 6) | (slot->regs[2] >> 2);
+				update_step(ptChip, slot);
+			}
+			break;
+		case 4:     //KeyOn/Off
+			if (data & 0x80)       //KeyOn
+			{
+				slot->playing = 1;
+				retrigger_sample(ptChip, slot);
+			}
+			else
+			{
+				if (slot->playing)
+				{
+					if (slot->sample.release_reg != 0xf)
+					{
+						slot->envelope_gen.state = RELEASE;
+					}
+					else
+					{
+						slot->playing = 0;
+					}
+				}
+			}
+			break;
+		case 5: // TL + Interpolation
+			slot->dest_total_level = (data >> 1) & 0x7f;
+			if (!(data & 1))   // Interpolate TL
+			{
+				if ((slot->total_level >> TL_SHIFT) > slot->dest_total_level)
+				{
+					slot->total_level_step = ptChip->total_level_steps[0]; // decrease
+				}
+				else
+				{
+					slot->total_level_step = ptChip->total_level_steps[1]; // increase
+				}
+			}
+			else
+			{
+				slot->total_level = slot->dest_total_level << TL_SHIFT;
+			}
+			break;
+		case 6: // LFO frequency + Pitch LFO
+		case 7: // Amplitude LFO
+			slot->lfo_frequency = (slot->regs[6] >> 3) & 7;
+			slot->vibrato = slot->regs[6] & 7;
+			slot->tremolo = slot->regs[7] & 7;
+			if (data)
+			{
+				lfo_compute_step(ptChip, &slot->pitch_lfo, slot->lfo_frequency, slot->vibrato, 0);
+				lfo_compute_step(ptChip, &slot->amplitude_lfo, slot->lfo_frequency, slot->tremolo, 1);
+			}
+			break;
+	}
+}
+
+INLINE UINT8 read_byte(MultiPCM *ptChip, UINT32 addr)
+{
+	return ptChip->ROM[addr & ptChip->ROMMask];
+}
+
+static void MultiPCM_update(void *info, UINT32 samples, DEV_SMPL **outputs)
+{
+	MultiPCM *ptChip = (MultiPCM *)info;
+	UINT32 i, sl;
+
+	if (ptChip->ROM == NULL)
+	{
+		memset(outputs[0], 0, samples * sizeof(DEV_SMPL));
+		memset(outputs[1], 0, samples * sizeof(DEV_SMPL));
+		return;
+	}
+
+	for (i = 0; i < samples; ++i)
+	{
+		DEV_SMPL smpl = 0;
+		DEV_SMPL smpr = 0;
+		for (sl = 0; sl < 28; ++sl)
+		{
+			slot_t *slot = &ptChip->slots[sl];
+			if (slot->playing && ! slot->muted)
+			{
+				UINT32 vol = (slot->total_level >> TL_SHIFT) | (slot->pan << 7);
+				UINT32 spos = slot->offset >> TL_SHIFT;
+				UINT32 step = slot->step;
+				INT32 csample;
+				INT32 fpart = slot->offset & ((1 << TL_SHIFT) - 1);
+				INT32 sample;
+
+				if (slot->reverse)
+				{
+					spos = slot->sample.end - spos - 1;
+				}
+
+				if (slot->sample.format & 4)	// 12-bit linear
+				{
+					UINT32 adr = slot->base + (spos >> 1) * 3;
+					if (!(spos & 1))
+					{ // ab.c ..
+						INT16 w0 = (read_byte(ptChip, adr) << 8) | ((read_byte(ptChip, adr + 1) & 0xf) << 4);
+						csample = w0;
+						break;
+					}
+					else
+					{ // ..C. AB
+						INT16 w0 = (read_byte(ptChip, adr + 2) << 8) | (read_byte(ptChip, adr + 1) & 0xf0);
+						csample = w0;
+						break;
+					}
+				}
+				else
+				{
+					csample = (INT16)(read_byte(ptChip, slot->base + spos) << 8);
+				}
+
+				sample = (csample * fpart + slot->prev_sample * ((1 << TL_SHIFT) - fpart)) >> TL_SHIFT;
+
+				if (slot->vibrato) // Vibrato enabled
+				{
+					step = step * pitch_lfo_step(&slot->pitch_lfo);
+					step >>= TL_SHIFT;
+				}
+
+				slot->offset += step;
+				if (slot->offset >= (slot->sample.end << TL_SHIFT))
+				{
+					slot->offset -= (slot->sample.end - slot->sample.loop) << TL_SHIFT;
+					// DD-9 expects the looped silence at the end of some samples to be the same whether reversed or not
+					slot->reverse = false;
+				}
+
+				if (spos ^ (slot->offset >> TL_SHIFT))
+				{
+					slot->prev_sample = csample;
+				}
+
+				if ((slot->total_level >> TL_SHIFT) != slot->dest_total_level)
+				{
+					slot->total_level += slot->total_level_step;
+				}
+
+				if (slot->tremolo) // Tremolo enabled
+				{
+					sample = sample * amplitude_lfo_step(&slot->amplitude_lfo);
+					sample >>= TL_SHIFT;
+				}
+
+				sample = (sample * envelope_generator_update(ptChip, slot)) >> 10;
+
+				smpl += (left_pan_table[vol] * sample) >> TL_SHIFT;
+				smpr += (right_pan_table[vol] * sample) >> TL_SHIFT;
+			}
+		}
+
+		outputs[0][i] = smpl;
+		outputs[1][i] = smpr;
+	}
+}
+
+static UINT8 multipcm_r(void *info, UINT8 offset)
+{
+	MultiPCM *ptChip = (MultiPCM *)info;
+	return 0;
 }
 
 
@@ -822,7 +898,7 @@ static void multipcm_write(void *info, UINT8 offset, UINT8 data)
 		case 0:     //Data write
 			if (ptChip->cur_slot == -1)
 				return;
-			write_slot(ptChip, ptChip->slots + ptChip->cur_slot, ptChip->address, data);
+			write_slot(ptChip, &ptChip->slots[ptChip->cur_slot], ptChip->address, data);
 			break;
 		case 1:
 			ptChip->cur_slot = VALUE_TO_CHANNEL[data & 0x1f];

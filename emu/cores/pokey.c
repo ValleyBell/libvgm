@@ -643,7 +643,7 @@ static void pokey_step_keyboard(pokey_device *d)
 			{
 				if (ret & 1)
 				{
-					d->m_KBCODE = d->m_kbd_latch;
+					d->m_KBCODE = (d->m_SKCTL & SK_DEBOUNCE) ? d->m_kbd_latch : (d->m_kbd_latch & 0xc0) | d->m_kbd_cnt;
 					d->m_SKSTAT |= SK_KEYBD;
 					if (d->m_IRQEN & IRQ_KEYBD)
 					{

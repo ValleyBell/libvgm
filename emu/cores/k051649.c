@@ -12,17 +12,24 @@
     waveform from RAM (32 bytes per waveform, 8 bit signed data).
 
     This sound chip is the same as the sound chip in some Konami
-    megaROM cartridges for the MSX. It is actually well researched
-    and documented:
+    megaROM cartridges for the MSX. This device only emulates the
+    sound portion, not the memory mapper.
 
-        http://bifi.msxnet.org/msxnet/tech/scc.html
-
-    Thanks to Sean Young (sean@mess.org) for some bugfixes.
-
-    K052539 is more or less equivalent to this chip except channel 5
+    052539 is more or less equivalent to this chip except channel 5
     does not share waveram with channel 4.
 
-***************************************************************************/
+    References:
+    - http://bifi.msxnet.org/msxnet/tech/scc.html
+    - http://bifi.msxnet.org/msxnet/tech/soundcartridge
+
+    TODO:
+    - bus conflicts on 051649 (not 052539). When the CPU accesses waveform RAM
+      and the SCC is reading it at the same time, it can cause audible spikes.
+      A similar thing happens internally when the shared ch4/ch5 do a read at
+      the same time.
+    - test register bits 0-4, not used in any software
+
+*******************************************************************************/
 
 #include <stdlib.h>
 #include <string.h>	// for memset
@@ -116,7 +123,7 @@ struct _k051649_state
 	UINT32 rate;
 
 	/* chip registers */
-	UINT8 test;
+	UINT8 test; // test register
 	UINT8 cur_reg;
 	UINT8 mode_plus;
 };
@@ -160,7 +167,6 @@ static void k051649_update(void *param, UINT32 samples, DEV_SMPL **outputs)
 	for (i = 0; i < samples; i++)
 	{
 		// scale to +-0x7800 (fallback solution to keep volume intact)
-		// TODO: scale by *32 instead of 256/5=51, then adjust VGM default volume from 0xA0->0x100
 		buffer[i] = buffer[i] * 256 / 8;
 		buffer2[i] = buffer[i];
 	}
@@ -217,7 +223,7 @@ static void device_reset_k051649(void *chip)
 	return;
 }
 
-/********************************************************************************/
+/******************************************************************************/
 
 static void k051649_waveform_w(void *chip, UINT8 offset, UINT8 data)
 {
@@ -241,16 +247,17 @@ static void k051649_waveform_w(void *chip, UINT8 offset, UINT8 data)
 static UINT8 k051649_waveform_r(void *chip, UINT8 offset)
 {
 	k051649_state *info = (k051649_state *)chip;
+	UINT8 counter = 0;
 	
-	// test-register bits 6/7 expose the internal counter
+	// test register bits 6/7 expose the internal counter
 	if (info->test & 0xc0)
 	{
-		if (offset >= 0x60)
-			offset += (info->channel_list[3 + (info->test >> 6 & 1)].counter >> FREQ_BITS);
+		if (offset >= 0x60 && (info->test & 0xc0) != 0xc0)
+			counter = (info->channel_list[3 + (info->test >> 6 & 1)].counter >> FREQ_BITS);
 		else if (info->test & 0x40)
-			offset += (info->channel_list[offset>>5].counter >> FREQ_BITS);
+			counter = (info->channel_list[offset >> 5].counter >> FREQ_BITS);
 	}
-	return info->channel_list[offset>>5].waveram[offset&0x1f];
+	return info->channel_list[offset >> 5].waveram[(offset + counter) & 0x1f];
 }
 
 
@@ -269,13 +276,14 @@ static void k052539_waveform_w(void *chip, UINT8 offset, UINT8 data)
 static UINT8 k052539_waveform_r(void *chip, UINT8 offset)
 {
 	k051649_state *info = (k051649_state *)chip;
+	UINT8 counter = 0;
 	
-	// test-register bit 6 exposes the internal counter
+	// test register bits 6/7 expose the internal counter
 	if (info->test & 0x40)
 	{
-		offset += (info->channel_list[offset>>5].counter >> FREQ_BITS);
+		counter = (info->channel_list[offset >> 5].counter >> FREQ_BITS);
 	}
-	return info->channel_list[offset>>5].waveram[offset&0x1f];
+	return info->channel_list[offset >> 5].waveram[(offset + counter) & 0x1f];
 }
 
 
@@ -291,12 +299,6 @@ static void k051649_frequency_w(void *chip, UINT8 offset, UINT8 data)
 	k051649_state *info = (k051649_state *)chip;
 	UINT8 freq_hi = offset & 1;
 	k051649_sound_channel* chn = &info->channel_list[offset >> 1];
-	
-	// test-register bit 5 resets the internal counter
-	if (info->test & 0x20)
-		chn->counter = ~0;
-	else if (chn->frequency < 9)
-		chn->counter |= ((1 << FREQ_BITS) - 1);
 
 	// update frequency
 	if (freq_hi)
@@ -304,6 +306,12 @@ static void k051649_frequency_w(void *chip, UINT8 offset, UINT8 data)
 	else
 		chn->frequency = (chn->frequency & 0xf00) | data;
 	chn->counter &= 0xFFFF0000;	// Valley Bell: Behaviour according to openMSX
+
+	// test register bit 5 resets the internal counter
+	if (info->test & 0x20)
+		chn->counter = ~0;
+	else if (chn->frequency < 9)
+		chn->counter |= ((1 << FREQ_BITS) - 1);
 }
 
 
