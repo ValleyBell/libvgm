@@ -164,6 +164,7 @@
     </ClCompile>
     <ClCompile Include="emu\cores\ay8910.c" />
     <ClCompile Include="emu\cores\ayintf.c" />
+    <ClCompile Include="emu\cores\bsmt2000.c" />
     <ClCompile Include="emu\cores\c140.c" />
     <ClCompile Include="emu\cores\c219.c" />
     <ClCompile Include="emu\cores\c352.c" />
@@ -177,10 +178,12 @@
     <ClCompile Include="emu\cores\fmopn.c" />
     <ClCompile Include="emu\cores\gb.c" />
     <ClCompile Include="emu\cores\iremga20.c" />
+    <ClCompile Include="emu\cores\k007232.c" />
     <ClCompile Include="emu\cores\k051649.c" />
     <ClCompile Include="emu\cores\k053260.c" />
     <ClCompile Include="emu\cores\k054539.c" />
     <ClCompile Include="emu\cores\mikey.c" />
+    <ClCompile Include="emu\cores\msm5205.c" />
     <ClCompile Include="emu\cores\multipcm.c" />
     <ClCompile Include="emu\cores\nesintf.c" />
     <ClCompile Include="emu\cores\nes_apu.c" />
@@ -247,6 +250,7 @@
     <ClInclude Include="emu\cores\adlibemu_opl_inc.h" />
     <ClInclude Include="emu\cores\ay8910.h" />
     <ClInclude Include="emu\cores\ayintf.h" />
+    <ClInclude Include="emu\cores\bsmt2000.h" />
     <ClInclude Include="emu\cores\c140.h" />
     <ClInclude Include="emu\cores\c219.h" />
     <ClInclude Include="emu\cores\c352.h" />
@@ -263,10 +267,12 @@
     <ClInclude Include="emu\cores\fmopn.h" />
     <ClInclude Include="emu\cores\gb.h" />
     <ClInclude Include="emu\cores\iremga20.h" />
+    <ClInclude Include="emu\cores\k007232.h" />
     <ClInclude Include="emu\cores\k051649.h" />
     <ClInclude Include="emu\cores\k053260.h" />
     <ClInclude Include="emu\cores\k054539.h" />
     <ClInclude Include="emu\cores\mikey.h" />
+    <ClInclude Include="emu\cores\msm5205.h" />
     <ClInclude Include="emu\cores\multipcm.h" />
     <ClInclude Include="emu\cores\nesintf.h" />
     <ClInclude Include="emu\cores\nes_apu.h" />
