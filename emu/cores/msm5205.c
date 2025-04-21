@@ -1,5 +1,5 @@
 // license:BSD-3-Clause
-// copyright-holders:eito,ValleyBell, Mao
+// copyright-holders:eito, ValleyBell, Mao
 /**********************************************************************************************
     OKI MSM5205 ADPCM (Full Working Implementation)
 ***********************************************************************************************/
@@ -69,7 +69,7 @@ static DEVDEF_RWFUNC devFunc[] = {
 };
 
 static DEV_DEF devDef = {
-    "MSM5205", "MAME", FCC_MAME,
+    "MSM5205", "eito", FCC_EITO,
     device_start_msm5205,
     device_stop_msm5205,
     device_reset_msm5205,
