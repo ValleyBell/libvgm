@@ -894,6 +894,7 @@ void VGMPlayer::Cmd_DACCtrl_Setup(void)	// DAC Stream Control: Setup Chip
 	
 	DACSTRM_DEV* dacStrm = &_dacStreams[dsID];
 	UINT8 chipType = fData[0x02] & 0x7F;
+	if( chipType == 0x29 ) chipType = 0x2b; // eito hack
 	UINT8 chipID = (fData[0x02] & 0x80) >> 7;
 	UINT16 chipCmd = ReadBE16(&fData[0x03]);
 	CHIP_DEVICE* destChip = GetDevicePtr(chipType, chipID);
