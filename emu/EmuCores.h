@@ -17,5 +17,6 @@
 #define FCC_CTR_	0x43545200	// superctr
 #define FCC_LAOO    0x4c414f4f	// laoo
 #define FCC_RN22    0x524e3232	// Mao757 (RN22)
+#define FCC_EITO    0x4549544f  // eito
 
 #endif	// __EMUCORES_H__
