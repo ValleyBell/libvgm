@@ -111,8 +111,8 @@ static void compute_tables(void) {
 
 INLINE UINT32 get_prescaler(msm5205_state *info) {
     return (info->data_in_last & PIN_S1) ? 
-        ((info->data_in_last & PIN_S2) ? 48 : 64) : 
-        ((info->data_in_last & PIN_S2) ? 96 : 192);
+        ((info->data_in_last & PIN_S2) ? 0 : 64) : 
+        ((info->data_in_last & PIN_S2) ? 48 : 96);
 }
 
 // ========== Core ADPCM Processing ==========
