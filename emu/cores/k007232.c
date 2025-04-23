@@ -1,309 +1,262 @@
-// license:BSD-3-Clause
-// copyright-holders:Nicola Salmoria,Hiromitsu Shioya
-/*********************************************************/
-/*    Konami PCM controller                              */
-/*********************************************************/
-
-/*
-  Changelog, Hiromitsu Shioya 02/05/2002
-    fixed start address decode timing. (sample loop bug.)
-
-  Changelog, Mish, August 1999:
-    Removed interface support for different memory regions per channel.
-    Removed interface support for differing channel volume.
-
-    Added bankswitching.
-    Added support for multiple chips.
-
-    (NB: Should different memory regions per channel be needed, the bankswitching function can set this up).
-
-  Chanelog, Nicola, August 1999:
-    Added Support for the k007232_VOL() macro.
-    Added external port callback, and functions to set the volume of the channels
-*/
-
-
-#include "emu.h"
+#include <stdlib.h>
+#include <string.h>
+#include "../../stdtype.h"
+#include "../EmuStructs.h"
+#include "../EmuCores.h"
+#include "../snddef.h"
+#include "../EmuHelper.h"
+#include "../logging.h"
+#include "../RatioCntr.h"
 #include "k007232.h"
-#include "wavwrite.h"
-#include "vgmwrite.hpp"
-#include <algorithm>
 
-#define K007232_LOG_PCM (0)
+#define K007232_PCM_MAX 2
+#define K007232_CLOCKDIV 128
+#define K007232_ADDR_MASK 0x1FFFF
 
-DEFINE_DEVICE_TYPE(K007232, k007232_device, "k007232", "K007232 PCM Controller")
+typedef struct {
+	UINT8  vol[2];   // [0]=left, [1]=right
+	UINT32 addr;     // current PCM address (17 bits)
+	INT32  counter;
+	UINT32 start;    // start address (17 bits)
+	UINT16 step;     // frequency/step value (12 bits)
+	UINT32 bank;     // base bank address (upper bits, shifted left by 17)
+	UINT8  play;     // playing flag
+	UINT8  mute;
+} K007232_Channel;
 
-k007232_device::k007232_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock)
-	: device_t(mconfig, K007232, tag, owner, clock)
-	, device_sound_interface(mconfig, *this)
-	, device_memory_interface(mconfig, *this)
-	, m_data_config("data", ENDIANNESS_LITTLE, 8, 17) // 17 bit address, 8 bit data, can be bankswitched per each voices
-	, m_rom(*this, DEVICE_SELF)
-	, m_pcmlimit(~0)
-	, m_bank(0)
-	, m_stream(nullptr)
-	, m_port_write_handler(*this)
-	, m_vgm_log(VGMLogger::GetDummyChip())
+typedef struct {
+	DEV_DATA _devData;
+	DEV_LOGGER logger;
+	RATIO_CNTR rateCntr;
+
+	K007232_Channel channel[K007232_PCM_MAX];
+	UINT8 wreg[0x10];
+
+	UINT8 *rom;
+	UINT32 rom_size;
+	UINT32 rom_mask;
+
+	UINT8 ext_vol[2];      // [0]=left, [1]=right (external port volume/pan)
+	UINT8 loop_en;         // loop control register
+} k007232_state;
+
+// Forward declarations
+static UINT8 device_start_k007232(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf);
+static void device_stop_k007232(void* chip);
+static void device_reset_k007232(void* chip);
+static void k007232_update(void* chip, UINT32 samples, DEV_SMPL **outputs);
+static void k007232_write(void* chip, UINT8 offset, UINT8 data);
+static UINT8 k007232_read(void* chip, UINT8 offset);
+static void k007232_write_rom(void* chip, UINT32 offset, UINT32 length, const UINT8* data);
+static void k007232_alloc_rom(void* chip, UINT32 memsize);
+static void k007232_set_mute_mask(void* chip, UINT32 MuteMask);
+static void k007232_set_log_cb(void* chip, DEVCB_LOG func, void* param);
+
+static DEVDEF_RWFUNC devFunc[] = {
+	{RWF_REGISTER | RWF_WRITE, DEVRW_A8D8, 0, k007232_write},
+	{RWF_REGISTER | RWF_READ, DEVRW_A8D8, 0, k007232_read},
+	{RWF_MEMORY | RWF_WRITE, DEVRW_BLOCK, 0, k007232_write_rom},
+	{RWF_MEMORY | RWF_WRITE, DEVRW_MEMSIZE, 0, k007232_alloc_rom},
+	{RWF_CHN_MUTE | RWF_WRITE, DEVRW_ALL, 0, k007232_set_mute_mask},
+	{0, 0, 0, NULL}
+};
+static DEV_DEF devDef = {
+	"K007232", "mame-faithful", FCC_RN22,
+	device_start_k007232, device_stop_k007232, device_reset_k007232,
+	k007232_update, NULL, k007232_set_mute_mask, NULL, NULL, k007232_set_log_cb, NULL,
+	devFunc
+};
+const DEV_DEF* devDefList_K007232[] = { &devDef, NULL };
+
+// --- Device lifecycle ---
+static UINT8 device_start_k007232(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 {
-	std::fill(std::begin(m_wreg), std::end(m_wreg), 0);
+	k007232_state* chip = (k007232_state*)calloc(1, sizeof(k007232_state));
+	UINT32 rate = cfg->clock / K007232_CLOCKDIV;
+
+	RC_SET_RATIO(&chip->rateCntr, cfg->clock, rate);
+	chip->rom = NULL;
+	chip->rom_size = 0;
+	chip->rom_mask = 0;
+
+	for (int i = 0; i < K007232_PCM_MAX; i++) {
+		chip->channel[i].vol[0] = 255 * (i == 0); // Ch0=L, Ch1=0
+		chip->channel[i].vol[1] = 255 * (i == 1); // Ch0=0, Ch1=R
+		chip->channel[i].mute = 0;
+	}
+	chip->ext_vol[0] = 255; chip->ext_vol[1] = 255;
+
+	INIT_DEVINF(retDevInf, &chip->_devData, rate, &devDef);
+	chip->_devData.chipInf = chip;
+	return 0;
 }
 
-//-------------------------------------------------
-//  device_start - device-specific startup
-//-------------------------------------------------
-
-void k007232_device::device_start()
+static void device_stop_k007232(void* chip)
 {
-	// assumes it can make an address mask with m_rom.length() - 1
-	assert (!m_rom.found() || !(m_rom.length() & (m_rom.length() - 1)));
+	k007232_state* c = (k007232_state*)chip;
+	free(c->rom);
+	free(chip);
+}
 
-	m_pcmlimit = 1 << 17;
-	// default mapping (bankswitched ROM)
-	if (m_rom.found() && !has_configured_map(0))
+static void device_reset_k007232(void* chip)
+{
+	k007232_state* c = (k007232_state*)chip;
+	memset(c->wreg, 0, sizeof(c->wreg));
+	c->loop_en = 0;
+
+	for (int i = 0; i < K007232_PCM_MAX; i++) {
+		K007232_Channel* ch = &c->channel[i];
+		ch->addr = 0;
+		ch->start = 0;
+		ch->counter = 0x1000;
+		ch->step = 0;
+		ch->play = 0;
+	}
+	c->channel[0].vol[0] = 255; c->channel[0].vol[1] = 255;
+	c->channel[1].vol[0] = 255;   c->channel[1].vol[1] = 255;
+	c->ext_vol[0] = 255; c->ext_vol[1] = 255;
+	RC_RESET(&c->rateCntr);
+}
+
+// --- Core update loop ---
+static void k007232_update(void* chip, UINT32 samples, DEV_SMPL **outputs)
+{
+	k007232_state* c = (k007232_state*)chip;
+	for (UINT32 j = 0; j < samples; j++)
 	{
-		if (m_rom.bytes() > 0x20000)
-			space(0).install_read_handler(0x00000, std::min<offs_t>(0x1ffff, m_rom.bytes() - 1), read8sm_delegate(*this, FUNC(k007232_device::read_rom_default)));
-		else
+		INT32 lsum = 0, rsum = 0;
+		for (int i = 0; i < K007232_PCM_MAX; i++)
 		{
-			space(0).install_rom(0x00000, m_rom.length() - 1, m_rom.target());
-			m_pcmlimit = m_rom.bytes();
-		}
-	}
-	space(0).cache(m_cache);
-
-	/* Set up the chips */
-	for (int i = 0; i < KDAC_A_PCM_MAX; i++)
-	{
-		m_channel[i].addr = 0;
-		m_channel[i].start = 0;
-		m_channel[i].counter = 0x1000;
-		m_channel[i].step = 0;
-		m_channel[i].play = 0;
-		m_channel[i].bank = 0;
-	}
-	m_channel[0].vol[0] = 255;  /* channel A output to output A */
-	m_channel[0].vol[1] = 0;
-	m_channel[1].vol[0] = 0;
-	m_channel[1].vol[1] = 255;  /* channel B output to output B */
-
-	for (auto & elem : m_wreg)
-		elem = 0;
-
-	m_stream = stream_alloc(0, 2, clock()/128);
-
-	m_vgm_log = machine().vgm_logger().OpenDevice(VGMC_K007232, clock());
-	m_vgm_log->DumpSampleROM(0x01, memregion(DEVICE_SELF));
-	//if (memregion(DEVICE_SELF) != nullptr)
-		//m_vgm_log->DumpSampleROM(0x01, memregion(DEVICE_SELF));
-	//else
-		//m_vgm_log->DumpSampleROM(0x01, space());
-	
-	
-	save_item(STRUCT_MEMBER(m_channel, vol));
-	save_item(STRUCT_MEMBER(m_channel, addr));
-	save_item(STRUCT_MEMBER(m_channel, counter));
-	save_item(STRUCT_MEMBER(m_channel, start));
-	save_item(STRUCT_MEMBER(m_channel, step));
-	save_item(STRUCT_MEMBER(m_channel, bank));
-	save_item(STRUCT_MEMBER(m_channel, play));
-	save_item(NAME(m_wreg));
-}
-
-//-------------------------------------------------
-//  device_clock_changed - called if the clock
-//  changes
-//-------------------------------------------------
-
-void k007232_device::device_clock_changed()
-{
-	m_stream->set_sample_rate(clock()/128);
-}
-
-//-------------------------------------------------
-//  memory_space_config - return a description of
-//  any address spaces owned by this device
-//-------------------------------------------------
-
-device_memory_interface::space_config_vector k007232_device::memory_space_config() const
-{
-	return space_config_vector{ std::make_pair(0, &m_data_config) };
-}
-
-/************************************************/
-/*    Konami PCM write register                 */
-/************************************************/
-
-void k007232_device::write(offs_t offset, u8 data)
-{
-	m_stream->update();
-
-	m_vgm_log->Write(0x00, offset, data);
-	
-	m_wreg[offset] = data; // standard data write
-
-	if (offset == 12)
-	{
-		// external port, usually volume control
-		m_port_write_handler(0, data);
-	}
-	else if (offset == 13)
-	{
-		// loop flag, handled by standard data write
-	}
-	else
-	{
-		channel_t *channel = &m_channel[(offset >= 6 ? 1 : 0)];
-		int reg_index = (offset >= 6 ? 6 : 0);
-		if (offset >= 6)
-			offset -= 6;
-
-		switch (offset)
-		{
-		case 0: // address step, LSB
-		case 1: // address step, MSB
-			channel->step = (BIT(m_wreg[reg_index + 1], 0, 4) << 8) | m_wreg[reg_index];
-			// TODO: Bit 4-5 is frequency divider, but not implemented now
-			break;
-		case 2:
-		case 3:
-		case 4:
-			// working data for start address
-			channel->start = (BIT(m_wreg[reg_index + 4], 0) << 16) | (m_wreg[reg_index + 3] << 8) | m_wreg[reg_index + 2];
-			break;
-		case 5: // start address
-			if (channel->start < m_pcmlimit)
+			K007232_Channel* ch = &c->channel[i];
+			if (ch->play && c->rom && !ch->mute)
 			{
-				channel->play = true;
-				channel->addr = channel->start;
-				channel->counter = 0x1000;
+				// Effective volume per output:
+				int vol_l = (ch->vol[0] * c->ext_vol[0]) >> 8;
+				int vol_r = (ch->vol[1] * c->ext_vol[1]) >> 8;
+
+				UINT32 pcm_addr = ch->bank + (ch->addr & K007232_ADDR_MASK);
+				if (pcm_addr >= c->rom_size)
+					continue;
+
+				UINT8 value = c->rom[pcm_addr];
+				INT16 out = ((value & 0x7F) - 0x40) << 7;
+
+				lsum += (out * vol_l) >> 7;
+				rsum += (out * vol_r) >> 7;
+
+				ch->counter -= 32;
+				while (ch->counter < 0 && ch->play)
+				{
+					ch->counter += 0x1000 - ch->step;
+					ch->addr++;
+					pcm_addr = ch->bank + (ch->addr & K007232_ADDR_MASK);
+					if (pcm_addr >= c->rom_size) {
+						ch->play = 0;
+						break;
+					}
+					value = c->rom[pcm_addr];
+					if ((value & 0x80) || (ch->addr > K007232_ADDR_MASK))
+					{
+						if (c->loop_en & (1 << i))
+							ch->addr = ch->start;
+						else
+							ch->play = 0;
+					}
+				}
 			}
-			break;
 		}
+		outputs[0][j] = lsum;
+		outputs[1][j] = rsum;
 	}
 }
 
-/************************************************/
-/*    Konami PCM read register                  */
-/************************************************/
-
-u8 k007232_device::read(offs_t offset)
+// --- Register interface ---
+static void k007232_write(void* chip, UINT8 offset, UINT8 data)
 {
+	k007232_state* c = (k007232_state*)chip;
+	c->wreg[offset & 0x0F] = data;
+
+	int ch = (offset >= 6) ? 1 : 0;
+	int reg_base = ch * 6;
+	K007232_Channel* v = &c->channel[ch];
+
+	switch (offset)
+	{
+	case 0x00: case 0x06: // address step LSB
+	case 0x01: case 0x07: // address step MSB
+		v->step = ((c->wreg[reg_base + 1] & 0x0F) << 8) | c->wreg[reg_base + 0];
+		break;
+	case 0x02: case 0x08: // start address LSB
+	case 0x03: case 0x09: // start address MID
+	case 0x04: case 0x0A: // start address MSB (only bit0)
+		v->start = ((c->wreg[reg_base + 4] & 0x01) << 16) | (c->wreg[reg_base + 3] << 8) | c->wreg[reg_base + 2];
+		break;
+	case 0x05: case 0x0B: // key on
+		v->play = 1;
+		v->addr = v->start;
+		v->counter = 0x1000;
+		break;
+	case 0x0C: // external volume (mono, or stereo balance)
+		c->ext_vol[0] = data; c->ext_vol[1] = data;
+		break;
+	case 0x0D: // loop enable
+		c->loop_en = data;
+		break;
+	case 0x0E: // bank for channel 0 (upper bits)
+		c->channel[0].bank = data << 17;
+		break;
+	case 0x0F: // bank for channel 1 (upper bits)
+		c->channel[1].bank = data << 17;
+		break;
+	}
+}
+
+static UINT8 k007232_read(void* chip, UINT8 offset)
+{
+	k007232_state* c = (k007232_state*)chip;
 	if (offset == 5 || offset == 11)
 	{
-		channel_t *channel = &m_channel[(offset == 11) ? 1 : 0];
-
-		if (channel->start < m_pcmlimit)
-		{
-			channel->play = true;
-			channel->addr = channel->start;
-			channel->counter = 0x1000;
-		}
+		K007232_Channel* v = &c->channel[(offset == 11) ? 1 : 0];
+		v->play = 1;
+		v->addr = v->start;
+		v->counter = 0x1000;
 	}
 	return 0;
 }
 
-/*****************************************************************************/
-
-void k007232_device::set_volume(int channel, int vol_a, int vol_b)
+// --- ROM loading and memory ---
+static void k007232_alloc_rom(void* chip, UINT32 memsize)
 {
-	m_channel[channel].vol[0] = vol_a;
-	m_channel[channel].vol[1] = vol_b;
-}
-
-void k007232_device::set_bank(int chan_a_bank, int chan_b_bank)
-{
-	m_channel[0].bank = chan_a_bank << 17;
-	m_channel[1].bank = chan_b_bank << 17;
-
-	// --- FIX: Log bank switches as register writes ---
-	// This ensures VGM logs contain the bank register changes,
-	// so libvgm will see the register writes to 0x0E and 0x0F.
-	if (m_vgm_log && m_vgm_log->IsValid())
+	k007232_state* c = (k007232_state*)chip;
+	if (c->rom_size != memsize)
 	{
-		m_vgm_log->Write(0x00, 0x0E, chan_a_bank);
-		m_vgm_log->Write(0x00, 0x0F, chan_b_bank);
+		c->rom = (UINT8*)realloc(c->rom, memsize);
+		c->rom_size = memsize;
+		UINT32 mask = 1;
+		while (mask < memsize)
+			mask <<= 1;
+		c->rom_mask = mask - 1;
+		memset(c->rom, 0xFF, memsize);
 	}
 }
 
-/*****************************************************************************/
-
-
-//-------------------------------------------------
-//  sound_stream_update - handle a stream update
-//-------------------------------------------------
-
-void k007232_device::sound_stream_update(sound_stream &stream, std::vector<read_stream_view> const &inputs, std::vector<write_stream_view> &outputs)
+static void k007232_write_rom(void* chip, UINT32 offset, UINT32 length, const UINT8* data)
 {
-	if (K007232_LOG_PCM)
-	{
-		for (int i = 0; i < KDAC_A_PCM_MAX; i++)
-		{
-			channel_t *channel = &m_channel[i];
-			if (channel->play)
-			{
-				char filebuf[256];
-				snprintf(filebuf, 256, "pcm%08x.wav", channel->start);
-				util::wav_file_ptr file = util::wav_open(filebuf, stream.sample_rate(), 1);
-				if (file)
-				{
-					u32 addr = channel->start;
-					while (!BIT(read_sample(i, addr), 7) && addr < m_pcmlimit)
-					{
-						int16_t out = ((read_sample(i, addr) & 0x7f) - 0x40) << 7;
-						util::wav_add_data_16(*file, &out, 1);
-						addr++;
-					}
-				}
-			}
-		}
-	}
+	k007232_state* c = (k007232_state*)chip;
+	if (offset >= c->rom_size) return;
+	if (offset + length > c->rom_size) length = c->rom_size - offset;
+	memcpy(&c->rom[offset], data, length);
+}
 
-	for (int j = 0; j < outputs[0].samples(); j++)
-	{
-		s32 lsum = 0, rsum = 0;
-		for (int i = 0; i < KDAC_A_PCM_MAX; i++)
-		{
-			channel_t *channel = &m_channel[i];
-			if (channel->play)
-			{
-				/**** PCM setup ****/
-				int vol_a = channel->vol[0] * 2;
-				int vol_b = channel->vol[1] * 2;
+static void k007232_set_mute_mask(void* chip, UINT32 MuteMask)
+{
+	k007232_state* c = (k007232_state*)chip;
+	for (int i = 0; i < K007232_PCM_MAX; i++)
+		c->channel[i].mute = (MuteMask & (1 << i)) ? 1 : 0;
+}
 
-				u32 addr = channel->addr & 0x1ffff;
-				while (channel->counter <= channel->step) // result : clock / (4 * (4096 - frequency))
-				{
-					if (BIT(read_sample(i, addr++), 7) || addr >= m_pcmlimit)
-					{
-						// end of sample
-						if (BIT(m_wreg[13], i))
-						{
-							/* loop to the beginning */
-							addr = channel->start;
-						}
-						else
-						{
-							/* stop sample */
-							channel->play = false;
-							break;
-						}
-					}
-					channel->counter += (0x1000 - channel->step);
-				}
-				channel->addr = addr;
-
-				if (!channel->play)
-					break;
-
-				channel->counter -= 32;
-
-				int out = (read_sample(i, addr) & 0x7f) - 0x40;
-
-				lsum += out * vol_a;
-				rsum += out * vol_b;
-			}
-		}
-		outputs[0].put_int(j, lsum, 32768);
-		outputs[1].put_int(j, rsum, 32768);
-	}
+static void k007232_set_log_cb(void* chip, DEVCB_LOG func, void* param)
+{
+	k007232_state* c = (k007232_state*)chip;
+	dev_logger_set(&c->logger, c, func, param);
 }
