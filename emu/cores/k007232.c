@@ -36,7 +36,6 @@ typedef struct {
 	UINT32 rom_size;
 	UINT32 rom_mask;
 
-	UINT8 ext_vol[2];      // [0]=left, [1]=right (external port volume/pan)
 	UINT8 loop_en;         // loop control register
 } k007232_state;
 
@@ -61,7 +60,7 @@ static DEVDEF_RWFUNC devFunc[] = {
 	{0, 0, 0, NULL}
 };
 static DEV_DEF devDef = {
-	"K007232", "mame-faithful", FCC_RN22,
+	"K007232", "Mao/cam900", FCC_RN22,
 	device_start_k007232, device_stop_k007232, device_reset_k007232,
 	k007232_update, NULL, k007232_set_mute_mask, NULL, NULL, k007232_set_log_cb, NULL,
 	devFunc
@@ -84,7 +83,6 @@ static UINT8 device_start_k007232(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 		chip->channel[i].vol[1] = 255 * (i == 1); // Ch0=0, Ch1=R
 		chip->channel[i].mute = 0;
 	}
-	chip->ext_vol[0] = 255; chip->ext_vol[1] = 255;
 
 	INIT_DEVINF(retDevInf, &chip->_devData, rate, &devDef);
 	chip->_devData.chipInf = chip;
@@ -112,9 +110,8 @@ static void device_reset_k007232(void* chip)
 		ch->step = 0;
 		ch->play = 0;
 	}
-	c->channel[0].vol[0] = 255; c->channel[0].vol[1] = 255;
-	c->channel[1].vol[0] = 255;   c->channel[1].vol[1] = 255;
-	c->ext_vol[0] = 255; c->ext_vol[1] = 255;
+	c->channel[0].vol[0] = 255; c->channel[0].vol[1] = 0;
+	c->channel[1].vol[0] = 0; c->channel[1].vol[1] = 255;
 	RC_RESET(&c->rateCntr);
 }
 
@@ -130,10 +127,6 @@ static void k007232_update(void* chip, UINT32 samples, DEV_SMPL **outputs)
 			K007232_Channel* ch = &c->channel[i];
 			if (ch->play && c->rom && !ch->mute)
 			{
-				// Effective volume per output:
-				int vol_l = (ch->vol[0] * c->ext_vol[0]) >> 8;
-				int vol_r = (ch->vol[1] * c->ext_vol[1]) >> 8;
-
 				UINT32 pcm_addr = ch->bank + (ch->addr & K007232_ADDR_MASK);
 				if (pcm_addr >= c->rom_size)
 					continue;
@@ -141,8 +134,8 @@ static void k007232_update(void* chip, UINT32 samples, DEV_SMPL **outputs)
 				UINT8 value = c->rom[pcm_addr];
 				INT16 out = ((value & 0x7F) - 0x40) << 7;
 
-				lsum += (out * vol_l) >> 7;
-				rsum += (out * vol_r) >> 7;
+				lsum += (out * ch->vol[0]) >> 7;
+				rsum += (out * ch->vol[1]) >> 7;
 
 				ch->counter -= 32;
 				while (ch->counter < 0 && ch->play)
@@ -219,16 +212,19 @@ static void k007232_write(void* chip, UINT8 offset, UINT8 data)
 		v->counter = 0x1000;
 		break;
 	case 0x0C: // External port write (usually volume/pan)
-		c->ext_vol[0] = data; c->ext_vol[1] = data;
 		break;
 	case 0x0D: // Loop enable
 		c->loop_en = data;
 		break;
 	case 0x0E: // Bank for channel 0 (upper bits)
-		c->channel[0].bank = data << 17;
-		break;
 	case 0x0F: // Bank for channel 1 (upper bits)
-		c->channel[1].bank = data << 17;
+		c->channel[offset & 1].bank = data << 17;
+		break;
+	case 0x10: // Left volume for channel 0
+	case 0x11: // Right volume for channel 0
+	case 0x12: // Left volume for channel 1
+	case 0x13: // Right volume for channel 1
+		c->channel[(offset >> 1) & 1].vol[offset & 1] = data;
 		break;
 	}
 }
