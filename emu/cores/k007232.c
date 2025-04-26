@@ -22,11 +22,11 @@
     Added external port callback, and functions to set the volume of the channels
 */
 
+
+
 /**********************************************************************************************
     Konami 007232 PCM controller (Full Working Implementation for libvgm)
 // copyright-holders: Mao, cam900
-
-
 	References:
 	https://gitlab.com/cam900/vgsound_emu/-/tree/main/vgsound_emu/src/k007232?ref_type=heads
 	https://git.redump.net/mame/tree/src/devices/sound/k007232.cpp
@@ -108,8 +108,8 @@ static DEV_DEF devDef = {
 };
 const DEV_DEF* devDefList_K007232[] = { &devDef, NULL };
 
-// --- Core implementation ---
 
+// --- Core implementation ---
 static UINT8 device_start_k007232(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 {
 	k007232_state* chip = (k007232_state*)calloc(1, sizeof(k007232_state));
@@ -325,7 +325,7 @@ static void k007232_set_log_cb(void* chip, DEVCB_LOG func, void* param)
 	dev_logger_set(&c->logger, c, func, param);
 }
 
-// --- Optional: attach external volume/pan callback (for host integration) ---
+// --- Optional: attach external volume/pan callback (for host integration like Ajax and Chequered Flag) ---
 void k007232_set_port_write_cb(void* chip, void (*cb)(UINT8))
 {
 	((k007232_state*)chip)->port_write_cb = cb;
