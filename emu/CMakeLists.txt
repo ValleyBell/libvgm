@@ -80,6 +80,7 @@ option(SNDEMU_X1_010_ALL "Sound Device X1-010: all cores" OFF)
 option(SNDEMU_C352_ALL "Sound Device C352: all cores" OFF)
 option(SNDEMU_GA20_ALL "Sound Device Irem GA20: all cores" OFF)
 option(SNDEMU_MIKEY_ALL "Sound Device Mikey: all cores" OFF)
+option(SNDEMU_K007232_ALL "Sound Device K007232: all cores" OFF)
 
 # console/computer presets
 option(SNDEMU__PRESET_SMS "Sound Dev. Preset: Sega Master System/Game Gear" OFF)
@@ -139,6 +140,7 @@ if(SNDEMU__ALL)
 	set(SNDEMU_C352_ALL ON)
 	set(SNDEMU_GA20_ALL ON)
 	set(SNDEMU_MIKEY_ALL ON)
+ 	set(SNDEMU_K007232_ALL ON)
 endif()
 
 
@@ -606,7 +608,11 @@ if(SNDEMU_MIKEY_ALL)
 	set(EMU_FILES ${EMU_FILES} cores/mikey.c)
 	set(EMU_CORE_HEADERS ${EMU_CORE_HEADERS} cores/mikey.h)
 endif()
-
+if(SNDEMU_K007232_ALL)
+	set(EMU_DEFS ${EMU_DEFS} " SNDDEV_K007232")
+	set(EMU_FILES ${EMU_FILES} cores/k007232.c)
+	set(EMU_CORE_HEADERS ${EMU_CORE_HEADERS} cores/k007232.h)
+endif()
 
 add_library(${PROJECT_NAME} ${LIBRARY_TYPE} ${EMU_FILES})
 set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
