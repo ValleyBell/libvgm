@@ -180,6 +180,7 @@ INLINE void daccontrol_SendCommand(dac_control* chip)
 	case DEVID_uPD7759:
 	case DEVID_OKIM6258:
 	case DEVID_K053260:	// TODO: Verify
+	case DEVID_K007232:
 	case DEVID_POKEY:
 	case DEVID_ES5503:
 	case DEVID_GA20:	// TODO: Verify
