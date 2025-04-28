@@ -123,12 +123,13 @@ endif()
 
 if(AUDIODRV_PULSE)
 	find_package(PulseAudio REQUIRED)
+	find_library(PULSE_SIMPLE_LIBRARY NAMES "pulse-simple" REQUIRED)
 	set(AUDIO_DEPS ${AUDIO_DEPS} "PulseAudio")
 	set(AUDIO_DEFS ${AUDIO_DEFS} " AUDDRV_PULSE")
 	set(AUDIO_FILES ${AUDIO_FILES} AudDrv_Pulse.c)
 	set(AUDIO_INCLUDES ${AUDIO_INCLUDES} ${PULSEAUDIO_INCLUDE_DIR})
 	# There seems to be no package or variable for pulse-simple.
-	set(AUDIO_LIBS ${AUDIO_LIBS} pulse-simple ${PULSEAUDIO_LIBRARY})
+	set(AUDIO_LIBS ${AUDIO_LIBS} ${PULSE_SIMPLE_LIBRARY} ${PULSEAUDIO_LIBRARY})
 	set(AUDIO_PC_REQUIRES ${AUDIO_PC_REQUIRES} "libpulse-simple")
 endif()
 

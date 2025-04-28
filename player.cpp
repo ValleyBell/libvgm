@@ -40,7 +40,6 @@ extern "C" int __cdecl _kbhit(void);
 #include "player/playera.hpp"
 #include "audio/AudioStream.h"
 #include "audio/AudioStream_SpcDrvFuns.h"
-#include "emu/Resampler.h"
 #include "emu/SoundDevs.h"	// for DEVID_*
 #include "emu/EmuCores.h"
 #include "utils/OSMutex.h"
@@ -560,7 +559,9 @@ static void DoChipControlMode(PlayerBase* player)
 			
 			// number (sound chip ID) / D (display) / P (player options)
 			printf("Sound Chip ID: ");
-			fgets(line, 0x80, stdin);
+			endPtr = fgets(line, 0x80, stdin);
+			if (endPtr == NULL)
+				return;
 			StripNewline(line);
 			if (line[0] == '\0')
 				return;
@@ -655,7 +656,9 @@ static void DoChipControlMode(PlayerBase* player)
 			
 			// Core / Linked Core / Opts / SRMode / SampleRate / ReSampleMode / Muting
 			printf("Command [C/LC/O/SRM/SR/RSM/M data]: ");
-			fgets(line, 0x80, stdin);
+			endPtr = fgets(line, 0x80, stdin);
+			if (endPtr == NULL)
+				return;
 			StripNewline(line);
 			
 			tokenStr = strtok(line, " ");
@@ -779,7 +782,9 @@ static void DoChipControlMode(PlayerBase* player)
 				droplay->GetPlayerOptions(playOpts);
 				
 				printf("Command [SPD/OPL3 data]: ");
-				fgets(line, 0x80, stdin);
+				endPtr = fgets(line, 0x80, stdin);
+				if (endPtr == NULL)
+					return;
 				StripNewline(line);
 				
 				tokenStr = strtok(line, " ");
@@ -814,7 +819,9 @@ static void DoChipControlMode(PlayerBase* player)
 				s98play->GetPlayerOptions(playOpts);
 				
 				printf("Command [SPD data]: ");
-				fgets(line, 0x80, stdin);
+				endPtr = fgets(line, 0x80, stdin);
+				if (endPtr == NULL)
+					return;
 				StripNewline(line);
 				
 				tokenStr = strtok(line, " ");
@@ -843,7 +850,9 @@ static void DoChipControlMode(PlayerBase* player)
 				vgmplay->GetPlayerOptions(playOpts);
 				
 				printf("Command [SPD/PHZ/HSO data]: ");
-				fgets(line, 0x80, stdin);
+				endPtr = fgets(line, 0x80, stdin);
+				if (endPtr == NULL)
+					return;
 				StripNewline(line);
 				
 				tokenStr = strtok(line, " ");
@@ -884,7 +893,9 @@ static void DoChipControlMode(PlayerBase* player)
 				gymplay->GetPlayerOptions(playOpts);
 				
 				printf("Command [SPD data]: ");
-				fgets(line, 0x80, stdin);
+				endPtr = fgets(line, 0x80, stdin);
+				if (endPtr == NULL)
+					return;
 				StripNewline(line);
 				
 				tokenStr = strtok(line, " ");
@@ -916,7 +927,9 @@ static void DoChipControlMode(PlayerBase* player)
 			
 			// Tags / FileInfo
 			printf("Command [T/FI/LL/TD data]: ");
-			fgets(line, 0x80, stdin);
+			endPtr = fgets(line, 0x80, stdin);
+			if (endPtr == NULL)
+				return;
 			StripNewline(line);
 			
 			tokenStr = strtok(line, " ");

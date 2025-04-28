@@ -107,9 +107,9 @@ static UINT8 FileLoader_dopen(void *context)
 	{
 		UINT8 sizeBuffer[4];
 		fseek(loader->hLoad.hFileRaw, -4, SEEK_END);
-		fread(sizeBuffer, 0x04, 0x01, loader->hLoad.hFileRaw);
-		loader->bytesTotal = ReadLE32(sizeBuffer);
-		if (loader->bytesTotal < (UINT32)ftell(loader->hLoad.hFileRaw) / 2)
+		readBytes = fread(sizeBuffer, 0x04, 1, loader->hLoad.hFileRaw);
+		loader->bytesTotal = (readBytes > 0) ? ReadLE32(sizeBuffer) : 0;
+		if (loader->bytesTotal < (UINT32)ftell(loader->hLoad.hFileRaw) / 2)	// catch "decompressed size too small"
 			loader->bytesTotal = 0;
 		fclose(loader->hLoad.hFileRaw);
 		loader->hLoad.hFileRaw = NULL;

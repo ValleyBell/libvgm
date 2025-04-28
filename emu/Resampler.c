@@ -401,6 +401,7 @@ static void Resmpl_Exec_LinearDown(RESMPL_STATE* CAA, UINT32 length, WAVE_32BS* 
 	// I'm adding 1.0 to avoid negative indexes
 	InBase = FIXPNT_FACT + (UINT32)(InPosL - (SLINT)CAA->smpLast * FIXPNT_FACT);
 	InPosNext = InBase;
+	InPre = fp2i_floor(InPosNext);
 	for (OutPos = 0; OutPos < length; OutPos ++)
 	{
 		//InPos = InBase + (UINT32)(OutPos * ChipSmpRateFP / CAA->smpRateDst);

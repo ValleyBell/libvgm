@@ -454,7 +454,7 @@ fmt_time(double sec) {
     i_min = i_min % 60;
 
     if(i_hour > 0) {
-        snprintf(ts,4,"%02u:",i_hour);
+        snprintf(ts,4,"%02u:",i_hour % 100);
     }
     if(i_min > 0) {
         snprintf(&ts[strlen(ts)],4,"%02u:",i_min);

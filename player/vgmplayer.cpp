@@ -14,7 +14,6 @@
 #include "../emu/Resampler.h"
 #include "../emu/SoundDevs.h"
 #include "../emu/EmuCores.h"
-#include "../emu/dac_control.h"
 #include "../emu/cores/sn764intf.h"	// for SN76496_CFG
 #include "../emu/cores/2612intf.h"
 #include "../emu/cores/segapcm.h"		// for SEGAPCM_CFG
@@ -24,7 +23,6 @@
 #include "../emu/cores/k054539.h"
 #include "../emu/cores/c140.h"
 #include "../emu/cores/qsoundintf.h"
-#include "../emu/cores/es5503.h"
 #include "../emu/cores/scsp.h"
 
 #include "dblk_compr.h"
