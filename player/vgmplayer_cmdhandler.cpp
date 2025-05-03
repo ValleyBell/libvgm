@@ -85,7 +85,7 @@
 	{0xFF, 0x02, &VGMPlayer::Cmd_unknown},              // 3E
 	{0x00, 0x02, &VGMPlayer::Cmd_GGStereo},             // 3F GameGear stereo mask (2nd chip)
 	{0x29, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // 40 Mikey register write
-	{0x2A, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // 41 K007232 register write
+	{0x2A, 0x03, &VGMPlayer::Cmd_K007232_Reg},          // 41 K007232 register write
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 42
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 43
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 44
@@ -1348,6 +1348,22 @@ void VGMPlayer::Cmd_OKIM6295_Reg(void)
 	}
 	
 	cDev->write8(cDev->base.defInf.dataPtr, ofs, data);
+	return;
+}
+
+void VGMPlayer::Cmd_K007232_Reg(void)
+{
+	UINT8 chipType = _CMD_INFO[fData[0x00]].chipType;
+	UINT8 chipID = (fData[0x01] & 0x80) >> 7;
+	CHIP_DEVICE* cDev = GetDevicePtr(chipType, chipID);
+	if (cDev == NULL || cDev->write8 == NULL)
+		return;
+
+	UINT8 ofs = fData[0x01] & 0x7F;
+	if (ofs == 0x1F)	// offset 0x1F: execute chip read
+		cDev->read8(cDev->base.defInf.dataPtr, fData[0x02]);	// the data value is the offset
+	else
+		cDev->write8(cDev->base.defInf.dataPtr, ofs, fData[0x02]);
 	return;
 }
 
