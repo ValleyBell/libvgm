@@ -54,7 +54,8 @@ static UINT8 MemoryLoader_dopen(void *context)
 
 	loader->pos = 0;
 
-	if(loader->srcSize >= 2 && loader->srcData[0] == 31 && loader->srcData[1] == 139)	// check for .gz file header
+	// minimum gzip size of 18 bytes (10 bytes header + 4 bytes CRC32 + 4 bytes size)
+	if(loader->srcSize >= 18 && loader->srcData[0] == 31 && loader->srcData[1] == 139)	// check for .gz file header
 	{
 		loader->modeCompr = MLMODE_CMP_GZ;
 		loader->zStream.zalloc = Z_NULL;

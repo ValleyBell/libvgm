@@ -327,12 +327,12 @@ protected:
 	UINT64 _lastTsMult;
 	UINT64 _lastTsDiv;
 	
-	UINT32 _filePos;
-	UINT32 _fileTick;
-	UINT32 _playTick;
-	UINT32 _playSmpl;
-	UINT32 _curLoop;
-	UINT32 _lastLoopTick;
+	UINT32 _filePos;	// file offset of next command to parse
+	UINT32 _fileTick;	// tick time of next command to parse
+	UINT32 _playTick;	// tick time when last parsing was issued (up to 1 Render() call behind current position)
+	UINT32 _playSmpl;	// sample time
+	UINT32 _curLoop;	// current repetition, 0 = first playthrough, 1 = repeating 1st time
+	UINT32 _lastLoopTick;	// tick time of last loop, used for "0-sample-loop" detection
 	
 	UINT8 _playState;
 	UINT8 _psTrigger;	// used to temporarily trigger special commands

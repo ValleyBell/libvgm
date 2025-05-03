@@ -273,8 +273,8 @@ static void k007232_write(void* chip, UINT8 offset, UINT8 data)
 		ch = (offset >> 1) & 1;
 		c->channel[ch].vol[offset & 1] = data;
 		break;
-	case 0x14-6: // Bankswitch registers
-	case 0x15-6:
+	case 0x14: // Bankswitch registers
+	case 0x15:
 		ch = offset & 1;
 		c->channel[ch].bank = data << 17;
 		break;
@@ -335,7 +335,7 @@ static void k007232_set_log_cb(void* chip, DEVCB_LOG func, void* param)
 }
 
 // --- Optional: attach external volume/pan callback (for host integration like Ajax and Chequered Flag) ---
-static void k007232_set_port_write_cb(void* chip, void (*cb)(UINT8 data))
+void k007232_set_port_write_cb(void* chip, void (*cb)(UINT8 data))
 {
 	k007232_state* c = (k007232_state*)chip;
 	c->port_write_cb = cb;
