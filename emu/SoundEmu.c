@@ -166,6 +166,7 @@
 #endif
 #ifdef SNDDEV_MIKEY
 #include "cores/mikey.h"
+#endif
 #ifdef SNDDEV_K007232
 #include "cores/k007232.h"
 #endif
