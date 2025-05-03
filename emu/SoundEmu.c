@@ -50,6 +50,7 @@
 #define SNDDEV_C352
 #define SNDDEV_GA20
 #define SNDDEV_MIKEY
+#define SNDDEV_K007232
 #endif
 
 #ifdef SNDDEV_SN76496
@@ -165,6 +166,9 @@
 #endif
 #ifdef SNDDEV_MIKEY
 #include "cores/mikey.h"
+#endif
+#ifdef SNDDEV_K007232
+#include "cores/k007232.h"
 #endif
 
 const DEV_DEF** SndEmu_GetDevDefList(UINT8 deviceID)
@@ -338,6 +342,10 @@ const DEV_DEF** SndEmu_GetDevDefList(UINT8 deviceID)
 #ifdef SNDDEV_MIKEY
 	case DEVID_MIKEY:
 		return devDefList_Mikey;
+#endif
+#ifdef SNDDEV_K007232
+	case DEVID_K007232:
+		return devDefList_K007232;
 #endif
 	default:
 		return NULL;
@@ -674,6 +682,10 @@ const char* SndEmu_GetDevName(UINT8 deviceID, UINT8 opts, const DEV_GEN_CFG* dev
 #ifdef SNDDEV_MIKEY
 	case DEVID_MIKEY:
 		return "MIKEY";
+#endif
+#ifdef SNDDEV_K007232
+	case DEVID_K007232:
+		return "K007232";
 #endif
 	default:
 		return NULL;
