@@ -10,6 +10,6 @@
 // default option bitmask: 0x00
 
 
-extern const DEV_DEF* devDefList_C352[];
+extern const DEV_DECL sndDev_C352;
 
 #endif	// __C352_H__

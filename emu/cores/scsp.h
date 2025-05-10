@@ -10,6 +10,6 @@
 // default option bitmask: 0x01
 
 
-extern const DEV_DEF* devDefList_SCSP[];
+extern const DEV_DECL sndDev_SCSP;
 
 #endif	// __SCSP_H__

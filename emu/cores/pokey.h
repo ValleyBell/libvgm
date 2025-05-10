@@ -3,6 +3,6 @@
 
 #include "../EmuStructs.h"
 
-extern const DEV_DEF* devDefList_Pokey[];
+extern const DEV_DECL sndDev_Pokey;
 
 #endif	// __POKEY_H__

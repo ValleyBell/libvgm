@@ -16,6 +16,6 @@
 // default option bitmask: 0x00
 
 
-extern const DEV_DEF* devDefList_GB_DMG[];
+extern const DEV_DECL sndDev_GB_DMG;
 
 #endif	// __GB_H__

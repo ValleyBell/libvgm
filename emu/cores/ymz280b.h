@@ -3,6 +3,6 @@
 
 #include "../EmuStructs.h"
 
-extern const DEV_DEF* devDefList_YMZ280B[];
+extern const DEV_DECL sndDev_YMZ280B;
 
 #endif	// __YMZ280B_H__

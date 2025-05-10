@@ -32,10 +32,10 @@
 #include <stdlib.h>
 #include <string.h>	// for memset
 #include <stddef.h>	// for NULL
-#include <math.h>
 
 #include "../../stdtype.h"
 #include "../EmuStructs.h"
+#include "../SoundDevs.h"
 #include "../EmuCores.h"
 #include "../snddef.h"
 #include "../EmuHelper.h"
@@ -85,10 +85,31 @@ static DEV_DEF devDef =
 	devFunc,	// rwFuncs
 };
 
-const DEV_DEF* devDefList_YMZ280B[] =
+static const char* DeviceName(const DEV_GEN_CFG* devCfg)
 {
-	&devDef,
-	NULL
+	return "YMZ280B";
+}
+
+static UINT16 DeviceChannels(const DEV_GEN_CFG* devCfg)
+{
+	return 8;
+}
+
+static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
+
+const DEV_DECL sndDev_YMZ280B =
+{
+	DEVID_YMZ280B,
+	DeviceName,
+	DeviceChannels,
+	DeviceChannelNames,
+	{	// cores
+		&devDef,
+		NULL
+	}
 };
 
 

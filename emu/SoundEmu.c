@@ -171,211 +171,204 @@
 #include "cores/k007232.h"
 #endif
 
-const DEV_DEF** SndEmu_GetDevDefList(UINT8 deviceID)
-{
-	switch(deviceID)
-	{
+const DEV_DECL* sndEmu_Devices[] = {
 #ifdef SNDDEV_SN76496
-	case DEVID_SN76496:
-		return devDefList_SN76496;
+	&sndDev_SN76496,
 #endif
 #ifdef SNDDEV_YM2413
-	case DEVID_YM2413:
-		return devDefList_YM2413;
+	&sndDev_YM2413,
 #endif
 #ifdef SNDDEV_YM2612
-	case DEVID_YM2612:
-		return devDefList_YM2612;
+	&sndDev_YM2612,
 #endif
 #ifdef SNDDEV_YM2151
-	case DEVID_YM2151:
-		return devDefList_YM2151;
+	&sndDev_YM2151,
 #endif
 #ifdef SNDDEV_SEGAPCM
-	case DEVID_SEGAPCM:
-		return devDefList_SegaPCM;
+	&sndDev_SegaPCM,
 #endif
 #ifdef SNDDEV_RF5C68
-	case DEVID_RF5C68:
-		return devDefList_RF5C68;
+	&sndDev_RF5C68,
 #endif
 #ifdef SNDDEV_YM2203
-	case DEVID_YM2203:
-		return devDefList_YM2203;
+	&sndDev_YM2203,
 #endif
 #ifdef SNDDEV_YM2608
-	case DEVID_YM2608:
-		return devDefList_YM2608;
+	&sndDev_YM2608,
 #endif
 #ifdef SNDDEV_YM2610
-	case DEVID_YM2610:
-		return devDefList_YM2610;
+	&sndDev_YM2610,
 #endif
 #ifdef SNDDEV_YM3812
-	case DEVID_YM3812:
-		return devDefList_YM3812;
+	&sndDev_YM3812,
 #endif
 #ifdef SNDDEV_YM3526
-	case DEVID_YM3526:
-		return devDefList_YM3526;
+	&sndDev_YM3526,
 #endif
 #ifdef SNDDEV_Y8950
-	case DEVID_Y8950:
-		return devDefList_Y8950;
+	&sndDev_Y8950,
 #endif
 #ifdef SNDDEV_YMF262
-	case DEVID_YMF262:
-		return devDefList_YMF262;
+	&sndDev_YMF262,
 #endif
 #ifdef SNDDEV_YMF278B
-	case DEVID_YMF278B:
-		return devDefList_YMF278B;
+	&sndDev_YMF278B,
 #endif
 #ifdef SNDDEV_YMF271
-	case DEVID_YMF271:
-		return devDefList_YMF271;
+	&sndDev_YMF271,
 #endif
 #ifdef SNDDEV_YMZ280B
-	case DEVID_YMZ280B:
-		return devDefList_YMZ280B;
+	&sndDev_YMZ280B,
 #endif
 #ifdef SNDDEV_32X_PWM
-	case DEVID_32X_PWM:
-		return devDefList_32X_PWM;
+	&sndDev_32X_PWM,
 #endif
 #ifdef SNDDEV_AY8910
-	case DEVID_AY8910:
-		return devDefList_AY8910;
+	&sndDev_AY8910,
 #endif
 #ifdef SNDDEV_GAMEBOY
-	case DEVID_GB_DMG:
-		return devDefList_GB_DMG;
+	&sndDev_GB_DMG,
 #endif
 #ifdef SNDDEV_NES_APU
-	case DEVID_NES_APU:
-		return devDefList_NES_APU;
+	&sndDev_NES_APU,
 #endif
 #ifdef SNDDEV_YMW258
-	case DEVID_YMW258:
-		return devDefList_YMW258;
+	&sndDev_YMW258,
 #endif
 #ifdef SNDDEV_UPD7759
-	case DEVID_uPD7759:
-		return devDefList_uPD7759;
+	&sndDev_uPD7759,
 #endif
 #ifdef SNDDEV_OKIM6258
-	case DEVID_OKIM6258:
-		return devDefList_OKIM6258;
+	&sndDev_OKIM6258,
 #endif
 #ifdef SNDDEV_OKIM6295
-	case DEVID_OKIM6295:
-		return devDefList_OKIM6295;
+	&sndDev_OKIM6295,
 #endif
 #ifdef SNDDEV_K051649
-	case DEVID_K051649:
-		return devDefList_K051649;
+	&sndDev_K051649,
 #endif
 #ifdef SNDDEV_K054539
-	case DEVID_K054539:
-		return devDefList_K054539;
+	&sndDev_K054539,
 #endif
 #ifdef SNDDEV_C6280
-	case DEVID_C6280:
-		return devDefList_C6280;
+	&sndDev_C6280,
 #endif
 #ifdef SNDDEV_C140
-	case DEVID_C140:
-		return devDefList_C140;
+	&sndDev_C140,
 #endif
 #ifdef SNDDEV_C219
-	case DEVID_C219:
-		return devDefList_C219;
+	&sndDev_C219,
 #endif
 #ifdef SNDDEV_K053260
-	case DEVID_K053260:
-		return devDefList_K053260;
+	&sndDev_K053260,
 #endif
 #ifdef SNDDEV_POKEY
-	case DEVID_POKEY:
-		return devDefList_Pokey;
+	&sndDev_Pokey,
 #endif
 #ifdef SNDDEV_QSOUND
-	case DEVID_QSOUND:
-		return devDefList_QSound;
+	&sndDev_QSound,
 #endif
 #ifdef SNDDEV_SCSP
-	case DEVID_SCSP:
-		return devDefList_SCSP;
+	&sndDev_SCSP,
 #endif
 #ifdef SNDDEV_WSWAN
-	case DEVID_WSWAN:
-		return devDefList_WSwan;
+	&sndDev_WSwan,
 #endif
 #ifdef SNDDEV_VBOY_VSU
-	case DEVID_VBOY_VSU:
-		return devDefList_VBoyVSU;
+	&sndDev_VBoyVSU,
 #endif
 #ifdef SNDDEV_SAA1099
-	case DEVID_SAA1099:
-		return devDefList_SAA1099;
+	&sndDev_SAA1099,
 #endif
 #ifdef SNDDEV_ES5503
-	case DEVID_ES5503:
-		return devDefList_ES5503;
+	&sndDev_ES5503,
 #endif
 #ifdef SNDDEV_ES5506
-	case DEVID_ES5506:
-		return devDefList_ES5506;
+	&sndDev_ES5506,
 #endif
 #ifdef SNDDEV_X1_010
-	case DEVID_X1_010:
-		return devDefList_X1_010;
+	&sndDev_X1_010,
 #endif
 #ifdef SNDDEV_C352
-	case DEVID_C352:
-		return devDefList_C352;
+	&sndDev_C352,
 #endif
 #ifdef SNDDEV_GA20
-	case DEVID_GA20:
-		return devDefList_GA20;
+	&sndDev_GA20,
 #endif
 #ifdef SNDDEV_MIKEY
-	case DEVID_MIKEY:
-		return devDefList_Mikey;
+	&sndDev_Mikey,
 #endif
 #ifdef SNDDEV_K007232
-	case DEVID_K007232:
-		return devDefList_K007232;
+	&sndDev_K007232,
 #endif
-	default:
-		return NULL;
-	}
+	NULL	// list end
+};
+
+static const DEV_DECL* SndEmu_GetDevDecl(DEV_ID deviceID, const DEV_DECL** deviceList)
+{
+	const DEV_DECL* const* devPtr = deviceList;
+	while(*devPtr != NULL && (*devPtr)->deviceID != deviceID)
+		devPtr ++;
+	return *devPtr;	// return device with respective deviceID
 }
 
-UINT8 SndEmu_Start(UINT8 deviceID, const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
+static UINT8 SndEmu_StartCore(const DEV_DECL* devDecl, const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 {
-	const DEV_DEF** diList;
-	const DEV_DEF** curDIL;
-	
-	diList = SndEmu_GetDevDefList(deviceID);
-	if (diList == NULL)
-		return EERR_UNK_DEVICE;
-	
-	for (curDIL = diList; *curDIL != NULL; curDIL ++)
+	const DEV_DEF* const* devCorePtr;
+	for (devCorePtr = devDecl->cores; *devCorePtr != NULL; devCorePtr ++)
 	{
+		const DEV_DEF* devCore = *devCorePtr;
 		// emuCore == 0 -> use default
-		if (! cfg->emuCore || (*curDIL)->coreID == cfg->emuCore)
+		if (! cfg->emuCore || devCore->coreID == cfg->emuCore)
 		{
-			UINT8 retVal;
-			
-			retVal = (*curDIL)->Start(cfg, retDevInf);
+			UINT8 retVal = devCore->Start(cfg, retDevInf);
 			if (! retVal)	// if initialization is successful, reset the chip to ensure a clean state
-				(*curDIL)->Reset(retDevInf->dataPtr);
+				devCore->Reset(retDevInf->dataPtr);
 			return retVal;
 		}
 	}
 	return EERR_NOT_FOUND;
 }
+
+UINT8 SndEmu_Start2(DEV_ID deviceID, const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf, const DEV_DECL** userDevList, UINT8 opts)
+{
+	const DEV_DECL** devLists[2] = {userDevList, sndEmu_Devices};
+	UINT8 retErr = EERR_UNK_DEVICE;
+	size_t curDevList;
+	
+	if (opts & EST_OPT_NO_DEFAULT)
+		devLists[1] = NULL;
+	for (curDevList = 0; curDevList < 2; curDevList ++)
+	{
+		if (devLists[curDevList] != NULL)
+		{
+			const DEV_DECL* device = SndEmu_GetDevDecl(deviceID, devLists[curDevList]);
+			if (device != NULL)
+			{
+				UINT8 retVal = SndEmu_StartCore(device, cfg, retDevInf);
+				if (retVal != EERR_NOT_FOUND || (opts & EST_OPT_STRICT_OVRD))
+				{
+					retDevInf->devDec = device;
+					return retVal;
+				}
+				retErr = retVal;
+			}
+		}
+	}
+	return retErr;
+}
+
+const DEV_DEF* const* SndEmu_GetDevDefList(DEV_ID deviceID)
+{
+	const DEV_DECL* device = SndEmu_GetDevDecl(deviceID, sndEmu_Devices);
+	return (device != NULL) ? device->cores : NULL;
+}
+
+UINT8 SndEmu_Start(DEV_ID deviceID, const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
+{
+	return SndEmu_Start2(deviceID, cfg, retDevInf, NULL, 0x00);
+}
+
 
 UINT8 SndEmu_Stop(DEV_INFO* devInf)
 {
@@ -433,261 +426,33 @@ UINT8 SndEmu_GetDeviceFunc(const DEV_DEF* devDef, UINT8 funcType, UINT8 rwType, 
 
 // opts:
 //	0x01: long names (1) / short names (0)
-const char* SndEmu_GetDevName(UINT8 deviceID, UINT8 opts, const DEV_GEN_CFG* devCfg)
+const char* SndEmu_GetDevName(DEV_ID deviceID, UINT8 opts, const DEV_GEN_CFG* devCfg)
 {
+	const DEV_DECL* device = SndEmu_GetDevDecl(deviceID, sndEmu_Devices);
+	if (device == NULL)
+		return NULL;
+
 	if (! (opts & 0x01))
-		devCfg = NULL;	// devCfg only has an effect when "long names" are enabled
-	switch(deviceID)
 	{
-#ifdef SNDDEV_SN76496
-	case DEVID_SN76496:
-		if (devCfg != NULL)
+		// special short names
+		switch(deviceID)
 		{
-			const SN76496_CFG* snCfg = (const SN76496_CFG*)devCfg;
-			if (snCfg->_genCfg.flags)
-				return "T6W28";
-			switch(snCfg->shiftRegWidth)
-			{
-			case 0x0F:
-				return (snCfg->clkDiv == 1) ? "SN94624" : "SN76489";
-			case 0x10:
-				if (snCfg->noiseTaps == 0x0009)
-					return "SEGA PSG";
-				else if (snCfg->noiseTaps == 0x0022)
-				{
-					if (snCfg->ncrPSG)	// Tandy noise mode
-						return snCfg->negate ? "NCR8496" : "PSSJ-3";
-					else
-						return "NCR8496";
-				}
-				break;
-			case 0x11:
-				return (snCfg->clkDiv == 1) ? "SN76494" : "SN76489A";
-			default:
-				return "SN764xx";
-			}
-		}
-		return "SN76496";
-#endif
-#ifdef SNDDEV_YM2413
-	case DEVID_YM2413:
-		if (devCfg != NULL && devCfg->flags)
-			return "VRC7";
-		return "YM2413";
-#endif
-#ifdef SNDDEV_YM2612
-	case DEVID_YM2612:
-		if (devCfg != NULL && devCfg->flags)
-			return "YM3438";
-		return "YM2612";
-#endif
-#ifdef SNDDEV_YM2151
-	case DEVID_YM2151:
-		return "YM2151";
-#endif
 #ifdef SNDDEV_SEGAPCM
-	case DEVID_SEGAPCM:
-		if (opts & 0x01)
-			return "Sega PCM";
-		return "SegaPCM";
-#endif
-#ifdef SNDDEV_RF5C68
-	case DEVID_RF5C68:
-		if (devCfg != NULL)
-		{
-			if (devCfg->flags == 1)
-				return "RF5C164";
-			else if (devCfg->flags == 2)
-				return "RF5C105";
-		}
-		return "RF5C68";
-#endif
-#ifdef SNDDEV_YM2203
-	case DEVID_YM2203:
-		return "YM2203";
-#endif
-#ifdef SNDDEV_YM2608
-	case DEVID_YM2608:
-		return "YM2608";
-#endif
-#ifdef SNDDEV_YM2610
-	case DEVID_YM2610:
-		if (devCfg != NULL && devCfg->flags)
-			return "YM2610B";
-		return "YM2610";
-#endif
-#ifdef SNDDEV_YM3812
-	case DEVID_YM3812:
-		return "YM3812";
-#endif
-#ifdef SNDDEV_YM3526
-	case DEVID_YM3526:
-		return "YM3526";
-#endif
-#ifdef SNDDEV_Y8950
-	case DEVID_Y8950:
-		return "Y8950";
-#endif
-#ifdef SNDDEV_YMF262
-	case DEVID_YMF262:
-		return "YMF262";
-#endif
-#ifdef SNDDEV_YMF278B
-	case DEVID_YMF278B:
-		return "YMF278B";
-#endif
-#ifdef SNDDEV_YMF271
-	case DEVID_YMF271:
-		return "YMF271";
-#endif
-#ifdef SNDDEV_YMZ280B
-	case DEVID_YMZ280B:
-		return "YMZ280B";
-#endif
-#ifdef SNDDEV_32X_PWM
-	case DEVID_32X_PWM:
-		return "32X PWM";
-#endif
-#ifdef SNDDEV_AY8910
-	case DEVID_AY8910:
-		if (devCfg != NULL)
-		{
-			const AY8910_CFG* ayCfg = (const AY8910_CFG*)devCfg;
-			switch(ayCfg->chipType)
-			{
-			case 0x00:
-				return "AY-3-8910";
-			case 0x01:
-				return "AY-3-8912";
-			case 0x02:
-				return "AY-3-8913";
-			case 0x03:
-				return "AY8930";
-			case 0x04:
-				return "AY-3-8914";
-			case 0x10:
-				return "YM2149";
-			case 0x11:
-				return "YM3439";
-			case 0x12:
-				return "YMZ284";
-			case 0x13:
-				return "YMZ294";
-			}
-		}
-		return "AY8910";
+		case DEVID_SEGAPCM:
+			return "SegaPCM";
 #endif
 #ifdef SNDDEV_GAMEBOY
-	case DEVID_GB_DMG:
-		if (opts & 0x01)
-			return "GameBoy DMG";
-		return "GB DMG";
-#endif
-#ifdef SNDDEV_NES_APU
-	case DEVID_NES_APU:
-		if (devCfg != NULL && devCfg->flags)
-			return "NES APU + FDS";
-		return "NES APU";
-#endif
-#ifdef SNDDEV_YMW258
-	case DEVID_YMW258:
-		return "YMW258";
-#endif
-#ifdef SNDDEV_UPD7759
-	case DEVID_uPD7759:
-		return "uPD7759";
-#endif
-#ifdef SNDDEV_OKIM6258
-	case DEVID_OKIM6258:
-		return "OKIM6258";
-#endif
-#ifdef SNDDEV_OKIM6295
-	case DEVID_OKIM6295:
-		return "OKIM6295";
-#endif
-#ifdef SNDDEV_K051649
-	case DEVID_K051649:
-		if (devCfg != NULL && devCfg->flags)
-			return "K052539";
-		return "K051649";
-#endif
-#ifdef SNDDEV_K054539
-	case DEVID_K054539:
-		return "K054539";
-#endif
-#ifdef SNDDEV_C6280
-	case DEVID_C6280:
-		return "C6280";
-#endif
-#ifdef SNDDEV_C140
-	case DEVID_C140:
-		return "C140";
-#endif
-#ifdef SNDDEV_C219
-	case DEVID_C219:
-		return "C219";
-#endif
-#ifdef SNDDEV_K053260
-	case DEVID_K053260:
-		return "K053260";
-#endif
-#ifdef SNDDEV_POKEY
-	case DEVID_POKEY:
-		return "Pokey";
-#endif
-#ifdef SNDDEV_QSOUND
-	case DEVID_QSOUND:
-		return "QSound";
-#endif
-#ifdef SNDDEV_SCSP
-	case DEVID_SCSP:
-		return "SCSP";
+		case DEVID_GB_DMG:
+			return "GB DMG";
 #endif
 #ifdef SNDDEV_WSWAN
-	case DEVID_WSWAN:
-		if (opts & 0x01)
-			return "WonderSwan";
-		return "WSwan";
+		case DEVID_WSWAN:
+			return "WSwan";
 #endif
-#ifdef SNDDEV_VBOY_VSU
-	case DEVID_VBOY_VSU:
-		return "VBoy VSU";
-#endif
-#ifdef SNDDEV_SAA1099
-	case DEVID_SAA1099:
-		return "SAA1099";
-#endif
-#ifdef SNDDEV_ES5503
-	case DEVID_ES5503:
-		return "ES5503";
-#endif
-#ifdef SNDDEV_ES5506
-	case DEVID_ES5506:
-		if (devCfg != NULL && ! devCfg->flags)
-			return "ES5505";
-		return "ES5506";
-#endif
-#ifdef SNDDEV_X1_010
-	case DEVID_X1_010:
-		return "X1-010";
-#endif
-#ifdef SNDDEV_C352
-	case DEVID_C352:
-		return "C352";
-#endif
-#ifdef SNDDEV_GA20
-	case DEVID_GA20:
-		return "GA20";
-#endif
-#ifdef SNDDEV_MIKEY
-	case DEVID_MIKEY:
-		return "MIKEY";
-#endif
-#ifdef SNDDEV_K007232
-	case DEVID_K007232:
-		return "K007232";
-#endif
-	default:
-		return NULL;
+		default:
+			devCfg = NULL;	// for all other devices, just look up names normally without configuration
+			break;
+		}
 	}
+	return device->name(devCfg);
 }

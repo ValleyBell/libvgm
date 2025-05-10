@@ -29,8 +29,8 @@
 #include <math.h>
 
 #include "../../stdtype.h"
-#include "../../_stdbool.h"
 #include "../EmuStructs.h"
+#include "../SoundDevs.h"
 #include "../EmuCores.h"
 #include "../snddef.h"
 #include "../EmuHelper.h"
@@ -84,10 +84,31 @@ static DEV_DEF devDef =
 	devFunc,	// rwFuncs
 };
 
-const DEV_DEF* devDefList_YMF271[] =
+static const char* DeviceName(const DEV_GEN_CFG* devCfg)
 {
-	&devDef,
-	NULL
+	return "YMF271";
+}
+
+static UINT16 DeviceChannels(const DEV_GEN_CFG* devCfg)
+{
+	return 12;
+}
+
+static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
+
+const DEV_DECL sndDev_YMF271 =
+{
+	DEVID_YMF271,
+	DeviceName,
+	DeviceChannels,
+	DeviceChannelNames,
+	{	// cores
+		&devDef,
+		NULL
+	}
 };
 
 
@@ -411,15 +432,15 @@ INLINE void calculate_step(YMF271Slot *slot)
 	}
 }
 
-INLINE bool check_envelope_end(YMF271Slot *slot)
+INLINE UINT8 check_envelope_end(YMF271Slot *slot)
 {
 	if (slot->volume <= 0)
 	{
 		slot->active = 0;
 		slot->volume = 0;
-		return true;
+		return 1;
 	}
-	return false;
+	return 0;
 }
 
 // calculate status end disable/enable (Desert War shots relies on this)

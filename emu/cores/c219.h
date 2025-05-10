@@ -3,6 +3,6 @@
 
 #include "../EmuStructs.h"
 
-extern const DEV_DEF* devDefList_C219[];
+extern const DEV_DECL sndDev_C219;
 
 #endif	// __C219_H__

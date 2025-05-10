@@ -8,6 +8,7 @@
 #include "emutypes.h"
 #include "../snddef.h"
 #include "../EmuStructs.h"
+#include "../SoundDevs.h"
 #include "../EmuCores.h"
 #include "../EmuHelper.h"
 #include "mikey.h"
@@ -47,10 +48,31 @@ static DEV_DEF devDef =
   devFunc,  // rwFuncs
 };
 
-const DEV_DEF* devDefList_Mikey[] =
+static const char* DeviceName(const DEV_GEN_CFG* devCfg)
 {
-  &devDef,
-  NULL
+	return "Mikey";
+}
+
+static UINT16 DeviceChannels(const DEV_GEN_CFG* devCfg)
+{
+	return 4;
+}
+
+static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
+
+const DEV_DECL sndDev_Mikey =
+{
+	DEVID_MIKEY,
+	DeviceName,
+	DeviceChannels,
+	DeviceChannelNames,
+	{	// cores
+		&devDef,
+		NULL
+	}
 };
 
 

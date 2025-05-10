@@ -5,7 +5,7 @@
 
 // cfg.flags: 0 = master mode (uses ROM), 1 = slave mode (data streamed to chip)
 
-extern const DEV_DEF* devDefList_uPD7759[];
+extern const DEV_DECL sndDev_uPD7759;
 
 // uPD7759 write offsets:
 //	0x00 - reset line

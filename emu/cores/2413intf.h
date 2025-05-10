@@ -12,6 +12,6 @@
 
 // cfg.flags: 0 = YM2413 mode, 1 = VRC7 mode
 
-extern const DEV_DEF* devDefList_YM2413[];
+extern const DEV_DECL sndDev_YM2413;
 
 #endif	// __2413INTF_H__

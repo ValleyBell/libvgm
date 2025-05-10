@@ -503,7 +503,7 @@ static void InitVGMChips(void)
 		devCfg.smplRate = sampleRate;
 		switch(curChip)
 		{
-		case DEVID_SN76496:
+		case DEVID_SN76496:	// TODO: change to numbers (VGM chip IDs)
 			{
 				SN76496_CFG snCfg;
 				

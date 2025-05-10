@@ -11,6 +11,6 @@
 #endif
 
 
-extern const DEV_DEF* devDefList_YMF262[];
+extern const DEV_DECL sndDev_YMF262;
 
 #endif	// __262INTF_H__

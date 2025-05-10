@@ -24,9 +24,11 @@
 #include <string.h>
 
 #include "../../stdtype.h"
+#include "../EmuStructs.h"
+#include "../SoundDevs.h"
+#include "../EmuCores.h"
 #include "../snddef.h"
 #include "../EmuHelper.h"
-#include "../EmuCores.h"
 #include "pwm.h"
 
 typedef struct _pwm_chip pwm_chip;
@@ -73,10 +75,31 @@ static DEV_DEF devDef =
 	devFunc,	// rwFuncs
 };
 
-const DEV_DEF* devDefList_32X_PWM[] =
+static const char* DeviceName(const DEV_GEN_CFG* devCfg)
 {
-	&devDef,
-	NULL
+	return "32X PWM";
+}
+
+static UINT16 DeviceChannels(const DEV_GEN_CFG* devCfg)
+{
+	return 1;
+}
+
+static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
+
+const DEV_DECL sndDev_32X_PWM =
+{
+	DEVID_32X_PWM,
+	DeviceName,
+	DeviceChannels,
+	DeviceChannelNames,
+	{	// cores
+		&devDef,
+		NULL
+	}
 };
 
 

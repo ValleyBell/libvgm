@@ -3,6 +3,6 @@
 
 #include "../EmuStructs.h"
 
-extern const DEV_DEF* devDefList_32X_PWM[];
+extern const DEV_DECL sndDev_32X_PWM;
 
 #endif	// __PWM_H__

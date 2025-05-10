@@ -43,6 +43,7 @@
 
 #include "../../stdtype.h"
 #include "../EmuStructs.h"
+#include "../SoundDevs.h"
 #include "../EmuCores.h"
 #include "../snddef.h"
 #include "../EmuHelper.h"
@@ -90,10 +91,31 @@ static DEV_DEF devDef =
 	devFunc,	// rwFuncs
 };
 
-const DEV_DEF* devDefList_ES5503[] =
+static const char* DeviceName(const DEV_GEN_CFG* devCfg)
 {
-	&devDef,
-	NULL
+	return "ES5503";
+}
+
+static UINT16 DeviceChannels(const DEV_GEN_CFG* devCfg)
+{
+	return 32;
+}
+
+static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
+
+const DEV_DECL sndDev_ES5503 =
+{
+	DEVID_ES5503,
+	DeviceName,
+	DeviceChannels,
+	DeviceChannelNames,
+	{	// cores
+		&devDef,
+		NULL
+	}
 };
 
 

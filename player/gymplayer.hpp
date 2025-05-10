@@ -48,7 +48,7 @@ class GYMPlayer : public PlayerBase
 private:
 	struct DevCfg
 	{
-		UINT8 type;
+		DEV_ID type;
 		UINT16 volume;
 		std::vector<UINT8> data;
 	};

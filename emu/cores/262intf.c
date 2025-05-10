@@ -1,6 +1,7 @@
 #include <stdlib.h>
 
 #include "../../stdtype.h"
+#include "../SoundDevs.h"
 #include "../EmuStructs.h"
 #include "../EmuCores.h"
 #include "../EmuHelper.h"
@@ -112,18 +113,46 @@ static DEV_DEF devDef262_Nuked =
 };
 #endif
 
-const DEV_DEF* devDefList_YMF262[] =
+static const char* DeviceName(const DEV_GEN_CFG* devCfg)
 {
+	return "YMF262";
+}
+
+#define DEV_CHN_COUNT	23
+static UINT16 DeviceChannels(const DEV_GEN_CFG* devCfg)
+{
+	return DEV_CHN_COUNT;
+}
+
+static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
+{
+	static const char* names[DEV_CHN_COUNT] =
+	{
+		"1", "2", "3", "4", "5", "6", "7", "8", "9",
+		"10", "11", "12", "13", "14", "15", "16", "17", "18",
+		"Bass Drum", "Snare Drum", "Tom Tom", "Cymbal", "Hi-Hat",
+	};
+	return names;
+}
+
+const DEV_DECL sndDev_YMF262 =
+{
+	DEVID_YMF262,
+	DeviceName,
+	DeviceChannels,
+	DeviceChannelNames,
+	{	// cores
 #ifdef EC_YMF262_ADLIBEMU
-	&devDef262_AdLibEmu,	// default, because it's better than MAME
+		&devDef262_AdLibEmu,	// default, because it's better than MAME
 #endif
 #ifdef EC_YMF262_MAME
-	&devDef262_MAME,
+		&devDef262_MAME,
 #endif
 #ifdef EC_YMF262_NUKED
-	&devDef262_Nuked,
+		&devDef262_Nuked,
 #endif
-	NULL
+		NULL
+	}
 };
 
 

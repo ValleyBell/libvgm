@@ -3,6 +3,6 @@
 
 #include "../EmuStructs.h"
 
-extern const DEV_DEF* devDefList_WSwan[];
+extern const DEV_DECL sndDev_WSwan;
 
 #endif	// __WS_AUDIO_H__

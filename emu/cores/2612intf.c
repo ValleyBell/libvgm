@@ -2,6 +2,7 @@
 
 #include "../../stdtype.h"
 #include "../EmuStructs.h"
+#include "../SoundDevs.h"
 #include "../EmuCores.h"
 #include "../EmuHelper.h"
 
@@ -106,18 +107,47 @@ static DEV_DEF devDef_Nuked =
 };
 #endif
 
-const DEV_DEF* devDefList_YM2612[] =
+static const char* DeviceName_YM2612(const DEV_GEN_CFG* devCfg)
 {
+	if (devCfg != NULL && devCfg->flags)
+		return "YM3438";
+	return "YM2612";
+}
+
+#define DEV_CHN_COUNT_YM2612	7
+static UINT16 DeviceChannels_YM2612(const DEV_GEN_CFG* devCfg)
+{
+	return DEV_CHN_COUNT_YM2612;
+}
+
+static const char** DeviceChannelNames_YM2612(const DEV_GEN_CFG* devCfg)
+{
+	static const char* names[DEV_CHN_COUNT_YM2612] =
+	{
+		"FM 1", "FM 2", "FM 3", "FM 4", "FM 5", "FM 6",
+		"DAC",
+	};
+	return names;
+}
+
+const DEV_DECL sndDev_YM2612 =
+{
+	DEVID_YM2612,
+	DeviceName_YM2612,
+	DeviceChannels_YM2612,
+	DeviceChannelNames_YM2612,
+	{	// cores
 #ifdef EC_YM2612_GPGX
-	&devDef_MAME,
+		&devDef_MAME,
 #endif
 #ifdef EC_YM2612_GENS
-	&devDef_Gens,
+		&devDef_Gens,
 #endif
 #ifdef EC_YM2612_NUKED
-	&devDef_Nuked,
+		&devDef_Nuked,
 #endif
-	NULL
+		NULL
+	}
 };
 
 

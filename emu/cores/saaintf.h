@@ -11,6 +11,6 @@
 #endif
 
 
-extern const DEV_DEF* devDefList_SAA1099[];
+extern const DEV_DECL sndDev_SAA1099;
 
 #endif	// __SAAINTF_H__

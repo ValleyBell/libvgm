@@ -40,11 +40,10 @@
 #include <string.h>
 #include "../../stdtype.h"
 #include "../EmuStructs.h"
+#include "../SoundDevs.h"
 #include "../EmuCores.h"
 #include "../snddef.h"
 #include "../EmuHelper.h"
-#include "../logging.h"
-#include "../RatioCntr.h"
 #include "k007232.h"
 
 #define K007232_PCM_MAX   2
@@ -64,7 +63,6 @@ typedef struct {
 
 typedef struct {
 	DEV_DATA    _devData;
-	DEV_LOGGER  logger;
 
 	K007232_Channel channel[K007232_PCM_MAX];
 	UINT8 wreg[0x10];
@@ -87,11 +85,11 @@ static UINT8 k007232_read(void* chip, UINT8 offset);
 static void k007232_write_rom(void* chip, UINT32 offset, UINT32 length, const UINT8* data);
 static void k007232_alloc_rom(void* chip, UINT32 memsize);
 static void k007232_set_mute_mask(void* chip, UINT32 MuteMask);
-static void k007232_set_log_cb(void* chip, DEVCB_LOG func, void* param);
 void k007232_set_port_write_cb(void* chip, void (*cb)(UINT8 data));	// TODO: integrate into DEVDEF_RWFUNC list
 
 // --- Device definition ---
-static DEVDEF_RWFUNC devFunc[] = {
+static DEVDEF_RWFUNC devFunc[] =
+{
 	{RWF_REGISTER | RWF_WRITE, DEVRW_A8D8, 0, k007232_write},
 	{RWF_REGISTER | RWF_READ, DEVRW_A8D8, 0, k007232_read},
 	{RWF_MEMORY | RWF_WRITE, DEVRW_BLOCK, 0, k007232_write_rom},
@@ -99,13 +97,51 @@ static DEVDEF_RWFUNC devFunc[] = {
 	{RWF_CHN_MUTE | RWF_WRITE, DEVRW_ALL, 0, k007232_set_mute_mask},
 	{0, 0, 0, NULL}
 };
-static DEV_DEF devDef = {
+static DEV_DEF devDef =
+{
 	"K007232", "MAME", FCC_MAME,
-	device_start_k007232, device_stop_k007232, device_reset_k007232,
-	k007232_update, NULL, k007232_set_mute_mask, NULL, NULL, k007232_set_log_cb, NULL,
+
+	device_start_k007232,
+	device_stop_k007232,
+	device_reset_k007232,
+	k007232_update,
+	
+	NULL,	// SetOptionBits
+	k007232_set_mute_mask,
+	NULL,	// SetPanning
+	NULL,	// SetSampleRateChangeCallback
+	NULL,	// SetLoggingCallback
+	NULL,	// LinkDevice
+	
 	devFunc
 };
-const DEV_DEF* devDefList_K007232[] = { &devDef, NULL };
+
+static const char* DeviceName(const DEV_GEN_CFG* devCfg)
+{
+	return "K007232";
+}
+
+static UINT16 DeviceChannels(const DEV_GEN_CFG* devCfg)
+{
+	return K007232_PCM_MAX;
+}
+
+static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
+
+const DEV_DECL sndDev_K007232 =
+{
+	DEVID_K007232,
+	DeviceName,
+	DeviceChannels,
+	DeviceChannelNames,
+	{	// cores
+		&devDef,
+		NULL
+	}
+};
 
 
 // --- Core implementation ---
@@ -326,12 +362,6 @@ static void k007232_set_mute_mask(void* chip, UINT32 MuteMask)
 	int i;
 	for (i = 0; i < K007232_PCM_MAX; i++)
 		c->channel[i].mute = (MuteMask & (1 << i)) ? 1 : 0;
-}
-
-static void k007232_set_log_cb(void* chip, DEVCB_LOG func, void* param)
-{
-	k007232_state* c = (k007232_state*)chip;
-	dev_logger_set(&c->logger, c, func, param);
 }
 
 // --- Optional: attach external volume/pan callback (for host integration like Ajax and Chequered Flag) ---

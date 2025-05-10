@@ -44,7 +44,7 @@ typedef struct sn76496_config
 // The noise device needs cfg.t6w28_tone to be set to the dataPtr of the tone device.
 // Both devices will then be linked together.
 
-extern const DEV_DEF* devDefList_SN76496[];
+extern const DEV_DECL sndDev_SN76496;
 
 #define SN76496_W_REG	0x00	// normal register write
 #define SN76496_W_GGST	0x01	// GameGear stereo write

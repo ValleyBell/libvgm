@@ -1,5 +1,6 @@
 #include <stddef.h>	// for NULL
 #include "../EmuStructs.h"
+#include "../SoundDevs.h"
 
 #include "2151intf.h"
 #ifdef EC_YM2151_MAME
@@ -10,13 +11,34 @@
 #endif
 
 
-const DEV_DEF* devDefList_YM2151[] =
+static const char* DeviceName(const DEV_GEN_CFG* devCfg)
 {
+	return "YM2151";
+}
+
+static UINT16 DeviceChannels(const DEV_GEN_CFG* devCfg)
+{
+	return 8;
+}
+
+static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
+
+const DEV_DECL sndDev_YM2151 =
+{
+	DEVID_YM2151,
+	DeviceName,
+	DeviceChannels,
+	DeviceChannelNames,
+	{	// cores
 #ifdef EC_YM2151_MAME
-	&devDef_YM2151_MAME,
+		&devDef_YM2151_MAME,
 #endif
 #ifdef EC_YM2151_NUKED
-	&devDef_YM2151_Nuked,
+		&devDef_YM2151_Nuked,
 #endif
-	NULL
+		NULL
+	}
 };

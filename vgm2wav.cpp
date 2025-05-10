@@ -396,7 +396,7 @@ static void set_core(PlayerBase *player, UINT8 devId, UINT32 coreId) {
 static void dump_info(PlayerBase *player) {
     std::vector<PLR_DEV_INFO> devInfList;
     PLR_SONG_INFO songInfo;
-    const DEV_DEF **devDefList;
+    const DEV_DEF* const* devDefList;
     UINT32 i;
     char str[5];
 

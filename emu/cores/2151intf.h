@@ -10,6 +10,6 @@
 #endif
 
 
-extern const DEV_DEF* devDefList_YM2151[];
+extern const DEV_DECL sndDev_YM2151;
 
 #endif	// __2151INTF_H__

@@ -55,6 +55,8 @@
 
 #include "../../stdtype.h"
 #include "../snddef.h"
+#include "../EmuStructs.h"
+#include "../SoundDevs.h"
 #include "../EmuHelper.h"
 #include "../EmuCores.h"
 #include "../logging.h"
@@ -113,10 +115,32 @@ static DEV_DEF devDef =
 	
 	devFunc,	// rwFuncs
 };
-const DEV_DEF* devDefList_OKIM6295[] =
+
+static const char* DeviceName(const DEV_GEN_CFG* devCfg)
 {
-	&devDef,
-	NULL
+	return "OKIM6295";
+}
+
+static UINT16 DeviceChannels(const DEV_GEN_CFG* devCfg)
+{
+	return 4;
+}
+
+static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
+
+const DEV_DECL sndDev_OKIM6295 =
+{
+	DEVID_OKIM6295,
+	DeviceName,
+	DeviceChannels,
+	DeviceChannelNames,
+	{	// cores
+		&devDef,
+		NULL
+	}
 };
 
 

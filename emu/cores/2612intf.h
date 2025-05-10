@@ -27,6 +27,6 @@
 // default option bitmask: 0x00
 
 
-extern const DEV_DEF* devDefList_YM2612[];
+extern const DEV_DECL sndDev_YM2612;
 
 #endif	// __2612INTF_H__

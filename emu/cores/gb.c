@@ -58,6 +58,7 @@ TODO:
 #include "../../stdtype.h"
 #include "../../_stdbool.h"
 #include "../EmuStructs.h"
+#include "../SoundDevs.h"
 #include "../EmuCores.h"
 #include "../snddef.h"
 #include "../EmuHelper.h"
@@ -107,10 +108,36 @@ static DEV_DEF devDef =
 	devFunc,	// rwFuncs
 };
 
-const DEV_DEF* devDefList_GB_DMG[] =
+static const char* DeviceName(const DEV_GEN_CFG* devCfg)
 {
-	&devDef,
-	NULL
+	return "GameBoy DMG";
+}
+
+#define DEV_CHN_COUNT	4
+static UINT16 DeviceChannels(const DEV_GEN_CFG* devCfg)
+{
+	return DEV_CHN_COUNT;
+}
+
+static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
+{
+	static const char* names[DEV_CHN_COUNT] =
+	{
+		"Square 1", "Square 2", "Wave", "Noise",
+	};
+	return names;
+}
+
+const DEV_DECL sndDev_GB_DMG =
+{
+	DEVID_GB_DMG,
+	DeviceName,
+	DeviceChannels,
+	DeviceChannelNames,
+	{	// cores
+		&devDef,
+		NULL
+	}
 };
 
 

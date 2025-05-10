@@ -28,6 +28,6 @@ typedef struct okim6258_config
 // default option bitmask: 0x00
 
 
-extern const DEV_DEF* devDefList_OKIM6258[];
+extern const DEV_DECL sndDev_OKIM6258;
 
 #endif	// __OKIM6258_H__

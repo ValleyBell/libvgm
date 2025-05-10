@@ -5,6 +5,7 @@
 #include "../../stdtype.h"
 #include "../../_stdbool.h"
 #include "../EmuStructs.h"
+#include "../SoundDevs.h"
 #include "../EmuCores.h"
 #include "../EmuHelper.h"
 
@@ -113,15 +114,52 @@ static DEV_DEF devDef_NSFPlay =
 };
 #endif
 
-const DEV_DEF* devDefList_NES_APU[] =
+static const char* DeviceName(const DEV_GEN_CFG* devCfg)
 {
+	if (devCfg != NULL && devCfg->flags)
+		return "NES APU + FDS";
+	return "NES APU";
+}
+
+#define DEV_CHN_COUNT_BASE	5
+#define DEV_CHN_COUNT_FDS	(DEV_CHN_COUNT_BASE + 1)
+static UINT16 DeviceChannels(const DEV_GEN_CFG* devCfg)
+{
+	if (devCfg != NULL)
+	{
+		if (devCfg->flags)
+			return DEV_CHN_COUNT_FDS;
+		else
+			return DEV_CHN_COUNT_BASE;
+	}
+	return DEV_CHN_COUNT_FDS;	// without configuration, return maximum channel number
+}
+
+static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
+{
+	static const char* names[DEV_CHN_COUNT_FDS] =
+	{
+		"Square 1", "Square 2", "Triangle", "Noise", "DPCM",
+		"FDS",
+	};
+	return names;
+}
+
+const DEV_DECL sndDev_NES_APU =
+{
+	DEVID_NES_APU,
+	DeviceName,
+	DeviceChannels,
+	DeviceChannelNames,
+	{	// cores
 #ifdef EC_NES_NSFPLAY
-	&devDef_NSFPlay,
+		&devDef_NSFPlay,
 #endif
 #ifdef EC_NES_MAME
-	&devDef_MAME,
+		&devDef_MAME,
 #endif
-	NULL
+		NULL
+	}
 };
 
 

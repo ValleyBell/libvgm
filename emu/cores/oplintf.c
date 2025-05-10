@@ -2,6 +2,7 @@
 
 #include "../../stdtype.h"
 #include "../EmuStructs.h"
+#include "../SoundDevs.h"
 #include "../EmuCores.h"
 #include "../EmuHelper.h"
 
@@ -115,19 +116,48 @@ static DEV_DEF devDef3812_Nuked =
 };
 #endif	// EC_YM3812_NUKED
 
-#ifdef SNDDEV_YM3812
-const DEV_DEF* devDefList_YM3812[] =
+#if defined(SNDDEV_YM3812) || defined(SNDDEV_YM3526)
+#define DEV_CHN_COUNT	14
+static UINT16 DeviceChannels(const DEV_GEN_CFG* devCfg)
 {
+	return DEV_CHN_COUNT;
+}
+
+static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
+{
+	static const char* names[DEV_CHN_COUNT] =
+	{
+		"1", "2", "3", "4", "5", "6", "7", "8", "9",
+		"Bass Drum", "Snare Drum", "Tom Tom", "Cymbal", "Hi-Hat",
+	};
+	return names;
+}
+#endif
+
+#ifdef SNDDEV_YM3812
+static const char* DeviceName_YM3812(const DEV_GEN_CFG* devCfg)
+{
+	return "YM3812";
+}
+
+const DEV_DECL sndDev_YM3812 =
+{
+	DEVID_YM3812,
+	DeviceName_YM3812,
+	DeviceChannels,
+	DeviceChannelNames,
+	{	// cores
 #ifdef EC_YM3812_ADLIBEMU
-	&devDef3812_AdLibEmu,	// default, because it's better than MAME
+		&devDef3812_AdLibEmu,	// default, because it's better than MAME
 #endif
 #ifdef EC_YM3812_MAME
-	&devDef3812_MAME,
+		&devDef3812_MAME,
 #endif
 #ifdef EC_YM3812_NUKED
-	&devDef3812_Nuked,	// note: OPL3 emulator, so some things aren't working (OPL1 mode, OPL2 detection)
+		&devDef3812_Nuked,	// note: OPL3 emulator, so some things aren't working (OPL1 mode, OPL2 detection)
 #endif
-	NULL
+		NULL
+	}
 };
 #endif
 
@@ -159,10 +189,21 @@ static DEV_DEF devDef3526_MAME =
 	devFunc3526_MAME,	// rwFuncs
 };
 
-const DEV_DEF* devDefList_YM3526[] =
+static const char* DeviceName_YM3526(const DEV_GEN_CFG* devCfg)
 {
-	&devDef3526_MAME,
-	NULL
+	return "YM3526";
+}
+
+const DEV_DECL sndDev_YM3526 =
+{
+	DEVID_YM3526,
+	DeviceName_YM3526,
+	DeviceChannels,
+	DeviceChannelNames,
+	{	// cores
+		&devDef3526_MAME,
+		NULL
+	}
 };
 #endif	// SNDDEV_YM3526
 
@@ -196,10 +237,38 @@ static DEV_DEF devDef8950_MAME =
 	devFunc8950_MAME,	// rwFuncs
 };
 
-const DEV_DEF* devDefList_Y8950[] =
+static const char* DeviceName_Y8950(const DEV_GEN_CFG* devCfg)
 {
-	&devDef8950_MAME,
-	NULL
+	return "Y8950";
+}
+
+#define DEV_CHN_COUNT_Y8950	15
+static UINT16 DeviceChannels_Y8950(const DEV_GEN_CFG* devCfg)
+{
+	return DEV_CHN_COUNT_Y8950;
+}
+
+static const char** DeviceChannelNames_Y8950(const DEV_GEN_CFG* devCfg)
+{
+	static const char* names[DEV_CHN_COUNT_Y8950] =
+	{
+		"1", "2", "3", "4", "5", "6", "7", "8", "9",
+		"Bass Drum", "Snare Drum", "Tom Tom", "Cymbal", "Hi-Hat",
+		"ADPCM",
+	};
+	return names;
+}
+
+const DEV_DECL sndDev_Y8950 =
+{
+	DEVID_Y8950,
+	DeviceName_Y8950,
+	DeviceChannels_Y8950,
+	DeviceChannelNames_Y8950,
+	{	// cores
+		&devDef8950_MAME,
+		NULL
+	}
 };
 #endif	// SNDDEV_Y8950
 

@@ -21,6 +21,6 @@ typedef struct segapcm_config
 	UINT8 bnkmask;
 } SEGAPCM_CFG;
 
-extern const DEV_DEF* devDefList_SegaPCM[];
+extern const DEV_DECL sndDev_SegaPCM;
 
 #endif	// __SEGAPCM_H__

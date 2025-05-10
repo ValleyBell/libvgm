@@ -2,8 +2,8 @@
 
 #include "../../stdtype.h"
 #include "../EmuStructs.h"
-#include "../EmuCores.h"
 #include "../SoundDevs.h"
+#include "../EmuCores.h"
 #include "../SoundEmu.h"
 #include "../EmuHelper.h"
 
@@ -27,15 +27,15 @@ static void init_ssg_devinfo(DEV_INFO* devInf, const DEV_GEN_CFG* baseCfg, UINT8
 
 static UINT8 device_start_ym2203(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf);
 static void device_stop_ym2203(void* param);
-static UINT8 device_ym2203_link_ssg(void* param, UINT8 devID, const DEV_INFO* defInfSSG);
+static UINT8 device_ym2203_link_ssg(void* param, UINT8 linkID, const DEV_INFO* defInfSSG);
 
 static UINT8 device_start_ym2608(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf);
 static void device_stop_ym2608(void* param);
-static UINT8 device_ym2608_link_ssg(void* param, UINT8 devID, const DEV_INFO* defInfSSG);
+static UINT8 device_ym2608_link_ssg(void* param, UINT8 linkID, const DEV_INFO* defInfSSG);
 
 static UINT8 device_start_ym2610(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf);
 static void device_stop_ym2610(void* param);
-static UINT8 device_ym2610_link_ssg(void* param, UINT8 devID, const DEV_INFO* defInfSSG);
+static UINT8 device_ym2610_link_ssg(void* param, UINT8 linkID, const DEV_INFO* defInfSSG);
 
 
 typedef struct _opn_info
@@ -72,10 +72,32 @@ static DEV_DEF devDef_MAME_2203 =
 	devFunc_MAME_2203,	// rwFuncs
 };
 
-const DEV_DEF* devDefList_YM2203[] =
+static const char* DeviceName_YM2203(const DEV_GEN_CFG* devCfg)
 {
-	&devDef_MAME_2203,
-	NULL
+	return "YM2203";
+}
+
+#define DEV_CHN_COUNT_YM2203	3
+static UINT16 DeviceChannels_YM2203(const DEV_GEN_CFG* devCfg)
+{
+	return DEV_CHN_COUNT_YM2203;
+}
+
+static const char** DeviceChannelNames_YM2203(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
+
+const DEV_DECL sndDev_YM2203 =
+{
+	DEVID_YM2203,
+	DeviceName_YM2203,
+	DeviceChannels_YM2203,
+	DeviceChannelNames_YM2203,
+	{	// cores
+		&devDef_MAME_2203,
+		NULL
+	}
 };
 #endif	// SNDDEV_YM2203
 
@@ -108,10 +130,38 @@ static DEV_DEF devDef_MAME_2608 =
 	devFunc_MAME_2608,	// rwFuncs
 };
 
-const DEV_DEF* devDefList_YM2608[] =
+static const char* DeviceName_YM2608(const DEV_GEN_CFG* devCfg)
 {
-	&devDef_MAME_2608,
-	NULL
+	return "YM2608";
+}
+
+#define DEV_CHN_COUNT_YM2608	13
+static UINT16 DeviceChannels_YM2608(const DEV_GEN_CFG* devCfg)
+{
+	return DEV_CHN_COUNT_YM2608;
+}
+
+static const char** DeviceChannelNames_YM2608(const DEV_GEN_CFG* devCfg)
+{
+	static const char* names[DEV_CHN_COUNT_YM2608] =
+	{
+		"FM 1", "FM 2", "FM 3", "FM 4", "FM 5", "FM 6",
+		"ADPCM-A 1", "ADPCM-A 2", "ADPCM-A 3", "ADPCM-A 4", "ADPCM-A 5", "ADPCM-A 6",
+		"ADPCM-B",
+	};
+	return names;
+}
+
+const DEV_DECL sndDev_YM2608 =
+{
+	DEVID_YM2608,
+	DeviceName_YM2608,
+	DeviceChannels_YM2608,
+	DeviceChannelNames_YM2608,
+	{	// cores
+		&devDef_MAME_2608,
+		NULL
+	}
 };
 #endif	// SNDDEV_YM2608
 
@@ -164,10 +214,42 @@ static DEV_DEF devDef_MAME_2610B =
 	devFunc_MAME_2610,	// rwFuncs
 };
 
-const DEV_DEF* devDefList_YM2610[] =
+static const char* DeviceName_YM2610(const DEV_GEN_CFG* devCfg)
 {
-	&devDef_MAME_2610,
-	NULL
+	if (devCfg != NULL && devCfg->flags)
+		return "YM2610B";
+	return "YM2610";
+}
+
+#define DEV_CHN_COUNT_YM2610	13
+static UINT16 DeviceChannels_YM2610(const DEV_GEN_CFG* devCfg)
+{
+	return DEV_CHN_COUNT_YM2610;
+}
+
+static const char** DeviceChannelNames_YM2610(const DEV_GEN_CFG* devCfg)
+{
+	static const char* names[DEV_CHN_COUNT_YM2610] =
+	{
+		// We ignore that the YM2610 non-B as 2 disabled FM channels here,
+		// because the mute mask assumes 6 channels for both variants.
+		"FM 1", "FM 2", "FM 3", "FM 4", "FM 5", "FM 6",
+		"ADPCM-A 1", "ADPCM-A 2", "ADPCM-A 3", "ADPCM-A 4", "ADPCM-A 5", "ADPCM-A 6",
+		"ADPCM-B",
+	};
+	return names;
+}
+
+const DEV_DECL sndDev_YM2610 =
+{
+	DEVID_YM2610,
+	DeviceName_YM2610,
+	DeviceChannels_YM2610,
+	DeviceChannelNames_YM2610,
+	{	// cores
+		&devDef_MAME_2610,
+		NULL
+	}
 };
 #endif	// SNDDEV_YM2610
 
@@ -253,12 +335,12 @@ static void device_stop_ym2203(void* param)
 	return;
 }
 
-static UINT8 device_ym2203_link_ssg(void* param, UINT8 devID, const DEV_INFO* defInfSSG)
+static UINT8 device_ym2203_link_ssg(void* param, UINT8 linkID, const DEV_INFO* defInfSSG)
 {
 	ssg_callbacks ssgfunc;
 	UINT8 retVal;
 	
-	if (devID != LINKDEV_SSG)
+	if (linkID != LINKDEV_SSG)
 		return EERR_UNK_DEVICE;
 	
 	if (defInfSSG == NULL)
@@ -308,12 +390,12 @@ static void device_stop_ym2608(void* param)
 	return;
 }
 
-static UINT8 device_ym2608_link_ssg(void* param, UINT8 devID, const DEV_INFO* defInfSSG)
+static UINT8 device_ym2608_link_ssg(void* param, UINT8 linkID, const DEV_INFO* defInfSSG)
 {
 	ssg_callbacks ssgfunc;
 	UINT8 retVal;
 	
-	if (devID != LINKDEV_SSG)
+	if (linkID != LINKDEV_SSG)
 		return EERR_UNK_DEVICE;
 	
 	if (defInfSSG == NULL)
@@ -365,12 +447,12 @@ static void device_stop_ym2610(void* param)
 	return;
 }
 
-static UINT8 device_ym2610_link_ssg(void* param, UINT8 devID, const DEV_INFO* defInfSSG)
+static UINT8 device_ym2610_link_ssg(void* param, UINT8 linkID, const DEV_INFO* defInfSSG)
 {
 	ssg_callbacks ssgfunc;
 	UINT8 retVal;
 	
-	if (devID != LINKDEV_SSG)
+	if (linkID != LINKDEV_SSG)
 		return EERR_UNK_DEVICE;
 	
 	if (defInfSSG == NULL)

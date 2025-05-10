@@ -5,7 +5,7 @@
 
 // cfg.flags: 0 = SCC mode (K051649), 1 = SCC+ mode (K052539)
 
-extern const DEV_DEF* devDefList_K051649[];
+extern const DEV_DECL sndDev_K051649;
 
 // K051649 read/write offsets:
 //	0x00 - waveform

@@ -34,7 +34,7 @@
 #define snprintf	_snprintf
 #endif
 
-/*static*/ const UINT8 VGMPlayer::_OPT_DEV_LIST[_OPT_DEV_COUNT] =
+/*static*/ const DEV_ID VGMPlayer::_OPT_DEV_LIST[_OPT_DEV_COUNT] =
 {
 	DEVID_SN76496, DEVID_YM2413, DEVID_YM2612, DEVID_YM2151, DEVID_SEGAPCM, DEVID_RF5C68, DEVID_YM2203, DEVID_YM2608,
 	DEVID_YM2610, DEVID_YM3812, DEVID_YM3526, DEVID_Y8950, DEVID_YMF262, DEVID_YMF278B, DEVID_YMF271, DEVID_YMZ280B,
@@ -44,7 +44,7 @@
 	DEVID_GA20, DEVID_MIKEY, DEVID_K007232, 
 };
 
-/*static*/ const UINT8 VGMPlayer::_DEV_LIST[_CHIP_COUNT] =
+/*static*/ const DEV_ID VGMPlayer::_DEV_LIST[_CHIP_COUNT] =
 {
 	DEVID_SN76496, DEVID_YM2413, DEVID_YM2612, DEVID_YM2151, DEVID_SEGAPCM, DEVID_RF5C68, DEVID_YM2203, DEVID_YM2608,
 	DEVID_YM2610, DEVID_YM3812, DEVID_YM3526, DEVID_Y8950, DEVID_YMF262, DEVID_YMF278B, DEVID_YMF271, DEVID_YMZ280B,
@@ -170,7 +170,7 @@ VGMPlayer::VGMPlayer() :
 		for (chipID = 0; chipID < 2; chipID ++)
 		{
 			size_t optID = optChip * 2 + chipID;
-			UINT8 devID = _OPT_DEV_LIST[optChip];
+			DEV_ID devID = _OPT_DEV_LIST[optChip];
 			PLR_DEV_OPTS& devOpts = _devOpts[optID];
 			
 			InitDeviceOptions(devOpts);
@@ -587,7 +587,7 @@ UINT8 VGMPlayer::GetSongDeviceInfo(std::vector<PLR_DEV_INFO>& devInfList) const
 
 size_t VGMPlayer::DeviceID2OptionID(UINT32 id) const
 {
-	UINT8 type;
+	DEV_ID type;
 	UINT8 instance;
 	
 	if (id & 0x80000000)
@@ -613,7 +613,7 @@ size_t VGMPlayer::DeviceID2OptionID(UINT32 id) const
 
 void VGMPlayer::RefreshDevOptions(CHIP_DEVICE& chipDev, const PLR_DEV_OPTS& devOpts)
 {
-	UINT8 chipType = chipDev.chipType;
+	DEV_ID chipType = chipDev.chipType;
 	DEV_INFO* devInf = &chipDev.base.defInf;
 	if (devInf->devDef->SetOptionBits == NULL)
 		return;
@@ -1188,7 +1188,7 @@ void VGMPlayer::GenerateDeviceConfig(void)
 		{
 			DEV_GEN_CFG devCfg;
 			SONG_DEV_CFG sdCfg;
-			UINT8 chipType = _DEV_LIST[vgmChip];
+			DEV_ID chipType = _DEV_LIST[vgmChip];
 			UINT32 hdrClock = GetChipClock(vgmChip, chipID);
 			
 			memset(&devCfg, 0x00, sizeof(DEV_GEN_CFG));
@@ -1352,7 +1352,7 @@ void VGMPlayer::InitDevices(void)
 	for (curChip = 0; curChip < _devCfgs.size(); curChip ++)
 	{
 		SONG_DEV_CFG& sdCfg = _devCfgs[curChip];
-		UINT8 chipType = sdCfg.type;
+		DEV_ID chipType = sdCfg.type;
 		UINT8 chipID = sdCfg.instance;
 		DEV_GEN_CFG* devCfg = (DEV_GEN_CFG*)&sdCfg.cfgData[0];
 		CHIP_DEVICE chipDev;
@@ -1878,7 +1878,7 @@ void VGMPlayer::ParseFileForFMClocks()
 			return;
 
 		case 0x67: // data block
-			filePos += 7 + ReadLE32(&_fileData[filePos + 3]);
+			filePos += 7 + (ReadLE32(&_fileData[filePos + 0x03]) & 0x7FFFFFFF);
 			break;
 
 		case 0x51: // YM2413 register write

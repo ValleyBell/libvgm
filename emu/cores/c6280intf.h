@@ -11,6 +11,6 @@
 
 // cfg.flags: [Ootake core] set to 1 enable a patch for "Hany in the Sky"
 
-extern const DEV_DEF* devDefList_C6280[];
+extern const DEV_DECL sndDev_C6280;
 
 #endif	// __C6280INTF_H__

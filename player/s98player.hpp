@@ -163,7 +163,7 @@ private:
 	UINT64 _lastTsMult;
 	UINT64 _lastTsDiv;
 	
-	static const UINT8 _OPT_DEV_LIST[_OPT_DEV_COUNT];	// list of configurable libvgm devices
+	static const DEV_ID _OPT_DEV_LIST[_OPT_DEV_COUNT];	// list of configurable libvgm devices
 	
 	S98_PLAY_OPTIONS _playOpts;
 	PLR_DEV_OPTS _devOpts[_OPT_DEV_COUNT * 2];	// space for 2 instances per chip

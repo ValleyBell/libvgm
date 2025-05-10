@@ -3,6 +3,6 @@
 
 #include "../EmuStructs.h"
 
-extern const DEV_DEF* devDefList_K007232[];
+extern const DEV_DECL sndDev_K007232;
 
 #endif  // __K007232_H__

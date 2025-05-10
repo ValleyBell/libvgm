@@ -95,13 +95,12 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 
 #include "../../stdtype.h"
 #include "../EmuStructs.h"
+#include "../SoundDevs.h"
 #include "../EmuCores.h"
 #include "../snddef.h"
-#include "../SoundDevs.h"
 #include "../SoundEmu.h"
 #include "../EmuHelper.h"
 #include "../logging.h"
@@ -118,7 +117,7 @@ static void init_opl3_devinfo(DEV_INFO* devInf, const DEV_GEN_CFG* baseCfg);
 static UINT8 device_start_ymf278b(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf);
 static void device_stop_ymf278b(void *info);
 static void device_reset_ymf278b(void *info);
-static UINT8 device_ymf278b_link_opl3(void* param, UINT8 devID, const DEV_INFO* defInfOPL3);
+static UINT8 device_ymf278b_link_opl3(void* param, UINT8 linkID, const DEV_INFO* defInfOPL3);
 
 static UINT8 ymf278b_r(void *info, UINT8 offset);
 static void ymf278b_w(void *info, UINT8 offset, UINT8 data);
@@ -161,10 +160,31 @@ static DEV_DEF devDef =
 	devFunc,	// rwFuncs
 };
 
-const DEV_DEF* devDefList_YMF278B[] =
+static const char* DeviceName(const DEV_GEN_CFG* devCfg)
 {
-	&devDef,
-	NULL
+	return "YMF278B";
+}
+
+static UINT16 DeviceChannels(const DEV_GEN_CFG* devCfg)
+{
+	return 24;
+}
+
+static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
+
+const DEV_DECL sndDev_YMF278B =
+{
+	DEVID_YMF278B,
+	DeviceName,
+	DeviceChannels,
+	DeviceChannelNames,
+	{	// cores
+		&devDef,
+		NULL
+	}
 };
 
 
@@ -1520,12 +1540,12 @@ static UINT8 get_opl3_funcs(const DEV_DEF* devDef, OPL3FM* retFuncs, DEV_LOGGER*
 	return 0x00;
 }
 
-static UINT8 device_ymf278b_link_opl3(void* param, UINT8 devID, const DEV_INFO* defInfOPL3)
+static UINT8 device_ymf278b_link_opl3(void* param, UINT8 linkID, const DEV_INFO* defInfOPL3)
 {
 	YMF278BChip* chip = (YMF278BChip *)param;
 	UINT8 retVal;
 	
-	if (devID != LINKDEV_OPL3)
+	if (linkID != LINKDEV_OPL3)
 		return EERR_UNK_DEVICE;
 	
 	if (defInfOPL3 == NULL)

@@ -3,6 +3,6 @@
 
 #include "../EmuStructs.h"
 
-extern const DEV_DEF* devDefList_VBoyVSU[];
+extern const DEV_DECL sndDev_VBoyVSU;
 
 #endif	// __VB_VSU_H__

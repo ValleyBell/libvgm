@@ -44,6 +44,6 @@
 //	OPT_NES_ENABLE_4011 | OPT_NES_ENABLE_PNOISE | OPT_NES_RANDOMIZE_NOISE | OPT_NES_TRI_MUTE
 
 
-extern const DEV_DEF* devDefList_NES_APU[];
+extern const DEV_DECL sndDev_NES_APU;
 
 #endif	// __NESINTF_H__

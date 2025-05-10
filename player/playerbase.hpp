@@ -61,7 +61,7 @@ struct PLR_SONG_INFO
 struct PLR_DEV_INFO
 {
 	UINT32 id;		// device ID
-	UINT8 type;		// device type
+	DEV_ID type;	// device type
 	UINT8 instance;	// instance ID of this device type (0xFF -> N/A for this format)
 	UINT16 volume;	// output volume (0x100 = 100%)
 	UINT32 core;	// FCC of device emulation core

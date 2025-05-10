@@ -3,6 +3,6 @@
 
 #include "../EmuStructs.h"
 
-extern const DEV_DEF* devDefList_K053260[];
+extern const DEV_DECL sndDev_K053260;
 
 #endif	// __K053260_H__

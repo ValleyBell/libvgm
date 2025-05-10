@@ -129,6 +129,8 @@
 
 #include "../../stdtype.h"
 #include "../snddef.h"
+#include "../EmuStructs.h"
+#include "../SoundDevs.h"
 #include "../EmuHelper.h"
 #include "../EmuCores.h"
 #include "../logging.h"
@@ -186,10 +188,32 @@ static DEV_DEF devDef =
 	
 	devFunc,	// rwFuncs
 };
-const DEV_DEF* devDefList_uPD7759[] =
+
+static const char* DeviceName(const DEV_GEN_CFG* devCfg)
 {
-	&devDef,
-	NULL
+	return "uPD7759";
+}
+
+static UINT16 DeviceChannels(const DEV_GEN_CFG* devCfg)
+{
+	return 1;
+}
+
+static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
+
+const DEV_DECL sndDev_uPD7759 =
+{
+	DEVID_uPD7759,
+	DeviceName,
+	DeviceChannels,
+	DeviceChannelNames,
+	{	// cores
+		&devDef,
+		NULL
+	}
 };
 
 

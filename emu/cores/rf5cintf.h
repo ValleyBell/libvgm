@@ -11,6 +11,6 @@
 
 // cfg.flags: [Gens core] set to 1 to enable a patch for Cosmic Fantasy Stories MCD
 
-extern const DEV_DEF* devDefList_RF5C68[];
+extern const DEV_DECL sndDev_RF5C68;
 
 #endif	// __RF5CINTF_H__
