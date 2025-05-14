@@ -11,11 +11,22 @@ extern "C"
 
 /**
  * @brief Retrieve a list of all available sound cores for a device. Uses built-in sound devices.
+ *        [deprecated - use SndEmu_GetDevDecl instead]
  *
  * @param deviceID ID of the sound device (see DEVID_ constants in SoundDevs.h)
  * @return an array of DEV_DEF* that is terminated by a NULL pointer
  */
 const DEV_DEF* const* SndEmu_GetDevDefList(DEV_ID deviceID);
+/**
+ * @brief Return the device declaration of a sound device.
+ *        Devices in the user-specified device list take priority.
+ *
+ * @param deviceID ID of the sound device (see DEVID_ constants in SoundDevs.h)
+ * @param userDevList user-supplied sound device list, must be terminated with a NULL pointer, list can be NULL
+ * @param opts option flags, see EST_OPT constants
+ * @return pointer to device declaration or NULL if the device is not found
+ */
+const DEV_DECL* SndEmu_GetDevDecl(DEV_ID deviceID, const DEV_DECL** userDevList, UINT8 opts);
 /**
  * @brief Initializes emulation for a sound device. Uses built-in sound devices.
  *

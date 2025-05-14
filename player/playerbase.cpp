@@ -74,6 +74,14 @@ UINT8 PlayerBase::SetPlaybackSpeed(double speed)
 	return 0xFF;	// not implemented
 }
 
+void PlayerBase::SetUserDevices(const DEV_DECL** userDevList, UINT8 devStartOpts)
+{
+	_userDevList = userDevList;
+	_devStartOpts = devStartOpts;
+	
+	return;
+}
+
 void PlayerBase::SetEventCallback(PLAYER_EVENT_CB cbFunc, void* cbParam)
 {
 	_eventCbFunc = cbFunc;

@@ -323,8 +323,16 @@ int main(int argc, char* argv[])
 		for (curDev = 0; curDev < diList.size(); curDev ++)
 		{
 			const PLR_DEV_INFO& pdi = diList[curDev];
-			printf(" Dev %d: Type 0x%02X #%d, Core %s, Clock %u, Rate %u, Volume 0x%X\n",
-				(int)pdi.id, pdi.type, (INT8)pdi.instance, FCC2Str(pdi.core).c_str(), pdi.devCfg->clock, pdi.smplRate, pdi.volume);
+			const char* devName = "";
+			UINT16 chns = 0;
+			if (pdi.devDecl != NULL)
+			{
+				devName = pdi.devDecl->name(pdi.devCfg);
+				chns = pdi.devDecl->channelCount(pdi.devCfg);
+			}
+			printf(" Dev %d: Type 0x%02X %7s #%d, Core %-4s, Clk %u, Rate %u, Vol 0x%X, Chns %u\n",
+				(int)pdi.id, pdi.type, devName, (INT8)pdi.instance, FCC2Str(pdi.core).c_str(),
+				pdi.devCfg->clock, pdi.smplRate, pdi.volume, chns);
 		}
 	}
 	const std::vector<VGMPlayer::DACSTRM_DEV>* vgmPcmStrms = NULL;

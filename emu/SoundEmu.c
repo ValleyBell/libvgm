@@ -304,12 +304,31 @@ const DEV_DECL* sndEmu_Devices[] = {
 	NULL	// list end
 };
 
-static const DEV_DECL* SndEmu_GetDevDecl(DEV_ID deviceID, const DEV_DECL** deviceList)
+static const DEV_DECL* SndEmu_DevDeclFromList(DEV_ID deviceID, const DEV_DECL** deviceList)
 {
 	const DEV_DECL* const* devPtr = deviceList;
 	while(*devPtr != NULL && (*devPtr)->deviceID != deviceID)
 		devPtr ++;
 	return *devPtr;	// return device with respective deviceID
+}
+
+const DEV_DECL* SndEmu_GetDevDecl(DEV_ID deviceID, const DEV_DECL** userDevList, UINT8 opts)
+{
+	const DEV_DECL** devLists[2] = {userDevList, sndEmu_Devices};
+	size_t curDevList;
+	
+	if (opts & EST_OPT_NO_DEFAULT)
+		devLists[1] = NULL;
+	for (curDevList = 0; curDevList < 2; curDevList ++)
+	{
+		if (devLists[curDevList] != NULL)
+		{
+			const DEV_DECL* device = SndEmu_DevDeclFromList(deviceID, devLists[curDevList]);
+			if (device != NULL)
+				return device;
+		}
+	}
+	return NULL;
 }
 
 static UINT8 SndEmu_StartCore(const DEV_DECL* devDecl, const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
@@ -322,6 +341,7 @@ static UINT8 SndEmu_StartCore(const DEV_DECL* devDecl, const DEV_GEN_CFG* cfg, D
 		if (! cfg->emuCore || devCore->coreID == cfg->emuCore)
 		{
 			UINT8 retVal = devCore->Start(cfg, retDevInf);
+			retDevInf->devDecl = devDecl;
 			if (! retVal)	// if initialization is successful, reset the chip to ensure a clean state
 				devCore->Reset(retDevInf->dataPtr);
 			return retVal;
@@ -342,15 +362,12 @@ UINT8 SndEmu_Start2(DEV_ID deviceID, const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf
 	{
 		if (devLists[curDevList] != NULL)
 		{
-			const DEV_DECL* device = SndEmu_GetDevDecl(deviceID, devLists[curDevList]);
+			const DEV_DECL* device = SndEmu_DevDeclFromList(deviceID, devLists[curDevList]);
 			if (device != NULL)
 			{
 				UINT8 retVal = SndEmu_StartCore(device, cfg, retDevInf);
 				if (retVal != EERR_NOT_FOUND || (opts & EST_OPT_STRICT_OVRD))
-				{
-					retDevInf->devDec = device;
 					return retVal;
-				}
 				retErr = retVal;
 			}
 		}
@@ -360,7 +377,7 @@ UINT8 SndEmu_Start2(DEV_ID deviceID, const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf
 
 const DEV_DEF* const* SndEmu_GetDevDefList(DEV_ID deviceID)
 {
-	const DEV_DECL* device = SndEmu_GetDevDecl(deviceID, sndEmu_Devices);
+	const DEV_DECL* device = SndEmu_DevDeclFromList(deviceID, sndEmu_Devices);
 	return (device != NULL) ? device->cores : NULL;
 }
 
@@ -428,7 +445,7 @@ UINT8 SndEmu_GetDeviceFunc(const DEV_DEF* devDef, UINT8 funcType, UINT8 rwType, 
 //	0x01: long names (1) / short names (0)
 const char* SndEmu_GetDevName(DEV_ID deviceID, UINT8 opts, const DEV_GEN_CFG* devCfg)
 {
-	const DEV_DECL* device = SndEmu_GetDevDecl(deviceID, sndEmu_Devices);
+	const DEV_DECL* device = SndEmu_DevDeclFromList(deviceID, sndEmu_Devices);
 	if (device == NULL)
 		return NULL;
 

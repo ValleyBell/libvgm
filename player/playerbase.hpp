@@ -2,7 +2,7 @@
 #define __PLAYERBASE_HPP__
 
 #include "../stdtype.h"
-#include "../emu/EmuStructs.h"	// for DEV_GEN_CFG
+#include "../emu/EmuStructs.h"	// for DEV_DECL, DEV_GEN_CFG
 #include "../emu/Resampler.h"	// for WAVE_32BS
 #include "../utils/DataLoader.h"
 #include <vector>
@@ -66,6 +66,7 @@ struct PLR_DEV_INFO
 	UINT16 volume;	// output volume (0x100 = 100%)
 	UINT32 core;	// FCC of device emulation core
 	UINT32 smplRate;	// current sample rate (0 if not running)
+	const DEV_DECL* devDecl;	// device declaration
 	const DEV_GEN_CFG* devCfg;	// device configuration parameters
 };
 
@@ -132,6 +133,7 @@ public:
 	virtual UINT8 SetSampleRate(UINT32 sampleRate);
 	virtual double GetPlaybackSpeed(void) const;
 	virtual UINT8 SetPlaybackSpeed(double speed);
+	virtual void SetUserDevices(const DEV_DECL** userDevList, UINT8 devStartOpts);
 	virtual void SetEventCallback(PLAYER_EVENT_CB cbFunc, void* cbParam);
 	virtual void SetFileReqCallback(PLAYER_FILEREQ_CB cbFunc, void* cbParam);
 	virtual void SetLogCallback(PLAYER_LOG_CB cbFunc, void* cbParam);
@@ -155,6 +157,8 @@ public:
 	
 protected:
 	UINT32 _outSmplRate;
+	const DEV_DECL** _userDevList;
+	UINT8 _devStartOpts;
 	PLAYER_EVENT_CB _eventCbFunc;
 	void* _eventCbParam;
 	PLAYER_FILEREQ_CB _fileReqCbFunc;

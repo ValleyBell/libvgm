@@ -126,7 +126,7 @@ struct _device_info
 	DEV_DATA* dataPtr;		// points to chip data structure
 	UINT32 sampleRate;		// sample rate of the Update() function
 	const DEV_DEF* devDef;	// points to device definition
-	const DEV_DECL* devDec;	// points to device declaration (will be NULL when calling DEV_DEV::Start() directly)
+	const DEV_DECL* devDecl;	// points to device declaration (will be NULL when calling DEV_DEV::Start() directly)
 	
 	UINT32 linkDevCount;	// number of link-able devices
 	DEVLINK_INFO* linkDevs;	// [freed by caller]
