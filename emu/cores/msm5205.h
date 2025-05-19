@@ -3,6 +3,8 @@
 
 #include "../EmuStructs.h"
 
-extern const DEV_DEF* devDefList_MSM5205[];
+// Configuration flags (bit 31 for MSM6585)
+
+extern const DEV_DECL sndDev_MSM5205;
 
 #endif  // __MSM5205_H__
