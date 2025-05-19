@@ -191,6 +191,13 @@ INLINE void daccontrol_SendCommand(dac_control* chip)
 		Data = ChipData[0x00];
 		chip->Write.A8D8(chip->chipData, Command, Data);
 		break;
+	case DEVID_MSM5205: // eito hack
+		if (chip->Write.A8D8 == NULL)
+			return;
+		Data = ChipData[0x00];
+		chip->Write.A8D8(chip->chipData, 0, Data);
+		chip->Write.A8D8(chip->chipData, 1, Data);
+		break;
 	// 16-bit Register, 8-bit Data
 	case DEVID_YM2612:
 	case DEVID_YM2608:
@@ -424,6 +431,10 @@ void daccontrol_setup_chip(void* info, DEV_INFO* devInf, UINT8 ChType, UINT16 Co
 	case DEVID_32X_PWM:
 	case DEVID_QSOUND:
 		chip->CmdSize = 0x02;
+		break;
+	case DEVID_MSM5205:
+		chip->CmdSize = 0x03;
+		chip->CmdSize = 0x02; // eito hack (fixed by Mao for 3-byte command)
 		break;
 	default:
 		chip->CmdSize = 0x01;
