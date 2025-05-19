@@ -62,7 +62,8 @@
 	https://vgmrips.net/forum/viewtopic.php?t=3436
 	https://gitlab.com/cam900/vgsound_emu/-/tree/main/vgsound_emu/src/msm5205?ref_type=heads
 	https://github.com/mamedev/mame/blob/master/src/devices/sound/msm5205.cpp (for the 6585)
-	
+	https://consolemods.org/wiki/images/f/f8/MSM5205.pdf
+ 
 ***********************************************************************************************/
 
 #include <stdlib.h>
