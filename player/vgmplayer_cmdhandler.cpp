@@ -86,7 +86,7 @@
 	{0x00, 0x02, &VGMPlayer::Cmd_GGStereo},             // 3F GameGear stereo mask (2nd chip)
 	{0x29, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // 40 Mikey register write
 	{0x2A, 0x03, &VGMPlayer::Cmd_K007232_Reg},          // 41 K007232 register write
-	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 42
+	{0x2B, 0x03, &VGMPlayer::Cmd_MSM5205_Reg},          // 42 MSM5205 register write
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 43
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 44
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 45
@@ -288,7 +288,7 @@
 	0x1B,	// 05 HuC6280
 	0x20,	// 06 SCSP
 	0x14,	// 07 NES APU
-	0xFF,	// 08
+	0x2B,	// 08 MSM5205
 	0xFF,	// 09
 	0xFF,	// 0A
 	0xFF,	// 0B
@@ -1055,6 +1055,24 @@ void VGMPlayer::Cmd_Port_Reg8_Data8(void)
 		return;
 	
 	SendYMCommand(cDev, fData[0x01] & 0x7F, fData[0x02], fData[0x03]);
+	return;
+}
+
+void VGMPlayer::Cmd_MSM5205_Reg(void)
+{
+	UINT8 chipType = _CMD_INFO[fData[0x00]].chipType;
+	UINT8 chipID = (fData[0x01] & 0x80) >> 7;
+	CHIP_DEVICE* cDev = GetDevicePtr(chipType, chipID);
+	if (cDev == NULL || cDev->write8 == NULL)
+		return;
+	
+	if ((fData[0x01] & 0x7F) == 0)
+	{
+		cDev->write8(cDev->base.defInf.dataPtr, 1, fData[0x02]); //eito hack
+		cDev->write8(cDev->base.defInf.dataPtr, 0, fData[0x02]);
+	}
+	else
+		cDev->write8(cDev->base.defInf.dataPtr, (fData[0x01] & 0x7F) + 1, fData[0x02]); //cam900 hack
 	return;
 }
 
