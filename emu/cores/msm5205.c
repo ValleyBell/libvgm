@@ -136,7 +136,7 @@ static DEVDEF_RWFUNC devFunc[] = {
 };
 
 static DEV_DEF devDef = {
-    "MSM5205", "Mao/eito", FCC_EITO,
+    "MSM5205", "eito", FCC_EITO,
     device_start_msm5205,
     device_stop_msm5205,
     device_reset_msm5205,
