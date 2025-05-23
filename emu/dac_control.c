@@ -275,6 +275,12 @@ INLINE void daccontrol_SendCommand(dac_control* chip)
 		chip->Write.A8D8(chip->chipData, 1, Command);
 		chip->Write.A8D8(chip->chipData, 0, Data);
 		break;
+	case DEVID_K005289:	// 16-bit Address (PROM offset), 4-bit Data
+		if (chip->Write.A16D8 == NULL)
+			return;
+		Data = ChipData[0x00] & 0x0F;
+		chip->Write.A16D8(chip->chipData, chip->RealPos, Data);
+		break;
 	//case DEVID_YMW258:	// TODO
 	}
 	
@@ -424,6 +430,9 @@ void daccontrol_setup_chip(void* info, DEV_INFO* devInf, UINT8 ChType, UINT16 Co
 	case DEVID_32X_PWM:
 	case DEVID_QSOUND:
 		chip->CmdSize = 0x02;
+		break;
+	case DEVID_K005289:
+		chip->CmdSize = 0x01;
 		break;
 	default:
 		chip->CmdSize = 0x01;
