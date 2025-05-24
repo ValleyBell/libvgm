@@ -1,3 +1,7 @@
+#ifndef __MSM5205_H__
+#define __MSM5205_H__
+#include "../EmuStructs.h"
+
 // Configuration flags (bit 31 for MSM6585)
 #define MSM5205_S1	0
 #define MSM5205_S2	1
