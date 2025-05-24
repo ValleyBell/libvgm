@@ -70,7 +70,7 @@
 	{0xFF, 0x00, &VGMPlayer::Cmd_invalid},              // 2F
 	{0x00, 0x02, &VGMPlayer::Cmd_SN76489},              // 30 SN76489 register write (2nd chip)
 	{0xFF, 0x02, &VGMPlayer::Cmd_AY_Stereo},            // 31 AY8910 stereo mask [chip type depends on data]
-	{0xFF, 0x02, &VGMPlayer::Cmd_unknown},              // 32
+	{0x2B, 0x02, &VGMPlayer::Cmd_MSM5205_Reg},          // 32 MSM5205 register write
 	{0xFF, 0x02, &VGMPlayer::Cmd_unknown},              // 33
 	{0xFF, 0x02, &VGMPlayer::Cmd_unknown},              // 34
 	{0xFF, 0x02, &VGMPlayer::Cmd_unknown},              // 35
@@ -86,7 +86,7 @@
 	{0x00, 0x02, &VGMPlayer::Cmd_GGStereo},             // 3F GameGear stereo mask (2nd chip)
 	{0x29, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // 40 Mikey register write
 	{0x2A, 0x03, &VGMPlayer::Cmd_K007232_Reg},          // 41 K007232 register write
-	{0x2B, 0x03, &VGMPlayer::Cmd_MSM5205_Reg},          // 42 MSM5205 register write
+	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 42
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 43
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 44
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 45
@@ -1065,14 +1065,8 @@ void VGMPlayer::Cmd_MSM5205_Reg(void)
 	CHIP_DEVICE* cDev = GetDevicePtr(chipType, chipID);
 	if (cDev == NULL || cDev->write8 == NULL)
 		return;
-	
-	if ((fData[0x01] & 0x7F) == 0)
-	{
-		cDev->write8(cDev->base.defInf.dataPtr, 1, fData[0x02]); //eito hack
-		cDev->write8(cDev->base.defInf.dataPtr, 0, fData[0x02]);
-	}
-	else
-		cDev->write8(cDev->base.defInf.dataPtr, (fData[0x01] & 0x7F) + 1, fData[0x02]); //cam900 hack
+
+	cDev->write8(cDev->base.defInf.dataPtr, (fData[0x01] >> 4) & 0x7, fData[0x01] & 0xF);
 	return;
 }
 
