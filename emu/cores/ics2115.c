@@ -662,9 +662,8 @@ static UINT8 fill_output(ics2115_state *chip, ics2115_voice *voice, UINT32 sampl
 		//if (playing(voice))
 		if ((!chip->vmode || playing(voice)) && (!voice->Muted))
 		{
-			// for increase volume
-			loutput[i] += (sample * vleft) >> (3 + VOLUME_BITS);
-			routput[i] += (sample * vright) >> (3 + VOLUME_BITS);
+			loutput[i] += (sample * vleft) >> (5 + VOLUME_BITS);
+			routput[i] += (sample * vright) >> (5 + VOLUME_BITS);
 		}
 
 		update_ramp(voice);
