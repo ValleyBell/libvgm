@@ -86,7 +86,7 @@
 	{0x00, 0x02, &VGMPlayer::Cmd_GGStereo},             // 3F GameGear stereo mask (2nd chip)
 	{0x29, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // 40 Mikey register write
 	{0x2A, 0x03, &VGMPlayer::Cmd_K007232_Reg},          // 41 K007232 register write
-	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 42
+	{0x2B, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // 42 ICS2115 register write
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 43
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 44
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 45
