@@ -195,7 +195,6 @@ INLINE void daccontrol_SendCommand(dac_control* chip)
 		if (chip->Write.A8D8 == NULL)
 			return;
 		Data = ChipData[0x00];
-		chip->Write.A8D8(chip->chipData, 0, Data);
 		chip->Write.A8D8(chip->chipData, 1, Data);
 		break;
 	// 16-bit Register, 8-bit Data
