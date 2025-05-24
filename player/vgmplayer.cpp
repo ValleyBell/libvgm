@@ -1287,6 +1287,17 @@ void VGMPlayer::GenerateDeviceConfig(void)
 				}
 				SaveDeviceConfig(sdCfg.cfgData, &devCfg, sizeof(DEV_GEN_CFG));
 				break;
+			case DEVID_MSM5205:
+				{
+					MSM5205_CFG okiCfg;
+
+					okiCfg._genCfg = devCfg;
+					okiCfg.prescaler = (_hdrBuffer[0x97] & 0x03) >> 0;
+					okiCfg.adpcmBits = (_hdrBuffer[0x97] & 0x04) ? MSM5205_ADPCM_4B : MSM5205_ADPCM_3B;
+
+					SaveDeviceConfig(sdCfg.cfgData, &okiCfg, sizeof(MSM5205_CFG));
+				}
+				break;
 			case DEVID_C352:
 				devCfg.clock = devCfg.clock * 72 / _hdrBuffer[0xD6];	// real clock = VGM clock / (VGM clkDiv * 4) * 288
 				SaveDeviceConfig(sdCfg.cfgData, &devCfg, sizeof(DEV_GEN_CFG));
