@@ -44,5 +44,6 @@
 #define DEVID_GA20		0x28
 #define DEVID_MIKEY		0x29
 #define DEVID_K007232	0x2A
+#define DEVID_K005289 0x2B
 
 #endif	// __SOUNDDEVS_H__
