@@ -1447,12 +1447,6 @@ void VGMPlayer::InitDevices(void)
 				break;
 			SndEmu_GetDeviceFunc(devInf->devDef, RWF_REGISTER | RWF_WRITE, DEVRW_A8D16, 0, (void**)&chipDev.writeD16);
 			break;
-		case DEVID_K005289:
-			retVal = SndEmu_Start2(chipType, devCfg, devInf, _userDevList, _devStartOpts);
-			if (retVal)
-				break;
-			SndEmu_GetDeviceFunc(devInf->devDef, RWF_REGISTER | RWF_WRITE, DEVRW_A8D16, 0, (void**)&chipDev.writeD16);
-			break;
 		case DEVID_YMW258:
 			retVal = SndEmu_Start2(chipType, devCfg, devInf, _userDevList, _devStartOpts);
 			if (retVal)
@@ -1518,6 +1512,13 @@ void VGMPlayer::InitDevices(void)
 				break;
 			SndEmu_GetDeviceFunc(devInf->devDef, RWF_REGISTER | RWF_WRITE, DEVRW_A16D8, 0, (void**)&chipDev.writeM8);
 			SndEmu_GetDeviceFunc(devInf->devDef, RWF_REGISTER | RWF_WRITE, DEVRW_A16D16, 0, (void**)&chipDev.writeM16);
+			SndEmu_GetDeviceFunc(devInf->devDef, RWF_MEMORY | RWF_WRITE, DEVRW_BLOCK, 0, (void**)&chipDev.romWrite);
+			break;
+		case DEVID_K005289:
+			retVal = SndEmu_Start2(chipType, devCfg, devInf, _userDevList, _devStartOpts);
+			if (retVal)
+				break;
+			SndEmu_GetDeviceFunc(devInf->devDef, RWF_REGISTER | RWF_WRITE, DEVRW_A8D16, 0, (void**)&chipDev.writeD16);
 			SndEmu_GetDeviceFunc(devInf->devDef, RWF_MEMORY | RWF_WRITE, DEVRW_BLOCK, 0, (void**)&chipDev.romWrite);
 			break;
 		default:
