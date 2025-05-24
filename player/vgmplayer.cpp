@@ -24,6 +24,7 @@
 #include "../emu/cores/c140.h"
 #include "../emu/cores/qsoundintf.h"
 #include "../emu/cores/scsp.h"
+#include "../emu/cores/msm5205.h"		// for MSM5205_CFG
 
 #include "dblk_compr.h"
 #include "../utils/StrUtils.h"
