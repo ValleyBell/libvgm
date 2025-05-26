@@ -89,7 +89,7 @@
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 42
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 43
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 44
-	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 45
+	{0x2E, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // 45 MSM5232 register write
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 46
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 47
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 48
