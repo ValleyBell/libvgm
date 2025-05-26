@@ -156,7 +156,6 @@ static void init_voice(MSM5232_STATE* chip, int i)
 	v->mode = 0;
 	v->pitch = -1;
 	v->GF = 0;
-	v->mute = 0;
 
 	v->TG_count_period = 1;
 	v->TG_count = 1;
@@ -176,12 +175,16 @@ static UINT8 device_start_msm5232(const MSM5232_CFG* cfg, DEV_INFO* retDevInf)
     chip->clock = cfg->_genCfg.clock;
 	for (int i = 0; i < 8; i++)
 		chip->capacitors[i] = cfg->capacitors[i];
+
     chip->sample_rate = chip->clock / CLOCK_RATE_DIVIDER;
     SRATE_CUSTOM_HIGHEST(cfg->_genCfg.srMode, chip->sample_rate, cfg->_genCfg.smplRate);
 
     init_tables(chip);
     for (int i = 0; i < MSM5232_NUM_CHANNELS; i++)
+    {
         init_voice(chip, i);
+        chip->voi[i].mute = 0;
+    }
 
     chip->noise_rng = 1;
     chip->noise_cnt = 0;
@@ -328,10 +331,13 @@ static void TG_group_advance(MSM5232_STATE* chip, int groupidx, MSM5232_GROUP_OU
 			if (chip->noise_clocks & 1) out2  += (1<<STEP_SH);
 		}
 		// Signed output
-		out->o16 += ((out16 - (1 << (STEP_SH-1))) * v->egvol) >> STEP_SH;
-		out->o8  += ((out8  - (1 << (STEP_SH-1))) * v->egvol) >> STEP_SH;
-		out->o4  += ((out4  - (1 << (STEP_SH-1))) * v->egvol) >> STEP_SH;
-		out->o2  += ((out2  - (1 << (STEP_SH-1))) * v->egvol) >> STEP_SH;
+		if (!v->mute)
+		{
+			out->o16 += ((out16 - (1 << (STEP_SH-1))) * v->egvol) >> STEP_SH;
+			out->o8  += ((out8  - (1 << (STEP_SH-1))) * v->egvol) >> STEP_SH;
+			out->o4  += ((out4  - (1 << (STEP_SH-1))) * v->egvol) >> STEP_SH;
+			out->o2  += ((out2  - (1 << (STEP_SH-1))) * v->egvol) >> STEP_SH;
+		}
 	}
 	// Mask outputs
 	out->o16 &= chip->EN_out16[groupidx];
