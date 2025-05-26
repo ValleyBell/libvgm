@@ -81,7 +81,7 @@ option(SNDEMU_C352_ALL "Sound Device C352: all cores" OFF)
 option(SNDEMU_GA20_ALL "Sound Device Irem GA20: all cores" OFF)
 option(SNDEMU_MIKEY_ALL "Sound Device Mikey: all cores" OFF)
 option(SNDEMU_K007232_ALL "Sound Device K007232: all cores" OFF)
-option(SNDEMU_MSM5205_ALL "Sound Device K005289: all cores" OFF)
+option(SNDEMU_K005289_ALL "Sound Device K005289: all cores" OFF)
 
 # console/computer presets
 option(SNDEMU__PRESET_SMS "Sound Dev. Preset: Sega Master System/Game Gear" OFF)
