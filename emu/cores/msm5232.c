@@ -1,11 +1,12 @@
 // license:GPL-2.0+
-// copyright-holders:Jarek Burczynski, Hiromitsu Shioya
+// copyright-holders:Jarek Burczynski, Hiromitsu Shioya, Angelo Salese
 /*
-    OKI MSM5232RS
+    OKI MSM5232
     8 channel tone generator
 
 	Modified for libvgm by Mao(RN22), cam900(MATRIX)
 	It's basically MAME code with improvements.
+	TA7630P emulation code (BSD-3-Clause) by Angelo Salese, adapted by Mao(RN22) and fully revised by cam900(MATRIX)
 */
 
 #include <stdlib.h>
@@ -23,10 +24,12 @@
 #include "msm5232.h"
 
 #define MSM5232_NUM_CHANNELS 8
+#define MSM5232_NUM_OUTPUTS 11
 #define CLOCK_RATE_DIVIDER 16
 #define STEP_SH 16
 #define VMIN 0
 #define VMAX 32768
+#define MSM5232_EXTVOL_GROUPS 2
 
 // MAME's ROM table, 88 entries (12 bits: 9 for counter, 3 for divider)
 #define ROM(counter, bindiv) ((counter) | ((bindiv) << 9))
@@ -59,7 +62,6 @@ typedef struct {
 	double ar_rate, dr_rate, rr_rate;
 	int pitch;
 	int GF;
-	uint8_t mute;
 } MSM5232_VOICE;
 
 typedef struct {
@@ -67,6 +69,7 @@ typedef struct {
 
 	MSM5232_VOICE voi[MSM5232_NUM_CHANNELS];
 	uint32_t noise_rng;
+	uint32_t noise_out;
 	int noise_step;
 	int noise_cnt;
 	int noise_clocks;
@@ -80,6 +83,14 @@ typedef struct {
 
 	double capacitors[8];
 	double ar_tbl[8], dr_tbl[16];
+
+	// --- TA7630 external volume (0..15, as used by Taito hardware) ---
+	uint8_t ext_vol[MSM5232_EXTVOL_GROUPS]; // [0]=group1 0..3, [1]=group2 4..7
+	double ext_vol_gain[MSM5232_EXTVOL_GROUPS]; // multiplier for output
+
+	UINT8 per_out_vol[MSM5232_NUM_OUTPUTS]; // per-output volume
+	UINT8 Muted[MSM5232_NUM_OUTPUTS];
+	double vol_ctrl[16];
 } MSM5232_STATE;
 
 // Forward declarations
@@ -108,7 +119,7 @@ static const char* DeviceName(const DEV_GEN_CFG* devCfg)
 {
 	return "MSM5232";
 }
-static UINT16 DeviceChannels(const DEV_GEN_CFG* devCfg) { return MSM5232_NUM_CHANNELS; }
+static UINT16 DeviceChannels(const DEV_GEN_CFG* devCfg) { return MSM5232_NUM_OUTPUTS; }
 static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg) { return NULL; }
 
 const DEV_DECL sndDev_MSM5232 =
@@ -135,10 +146,11 @@ static void init_tables(MSM5232_STATE* chip)
 		int rcp_duty_cycle = 1 << ((i & 4) ? (i & ~2) : i);
 		chip->ar_tbl[i] = (rcp_duty_cycle / clockscale) * R51;
 	}
-	for (int i = 0; i < 16; i++) {
+	for (int i = 0; i < 8; i++) {
 		double clockscale = (double)chip->clock / 2119040.0;
 		int rcp_duty_cycle = 1 << ((i & 4) ? (i & ~2) : i);
-		chip->dr_tbl[i] = (i < 8) ? (rcp_duty_cycle / clockscale) * R52 : (rcp_duty_cycle / clockscale) * R53;
+		chip->dr_tbl[i] = (rcp_duty_cycle / clockscale) * R52;
+		chip->dr_tbl[i + 8] = (rcp_duty_cycle / clockscale) * R53;
 	}
 	chip->noise_step = (int)((1 << STEP_SH) / 128.0 * ((double)chip->clock / chip->sample_rate));
 }
@@ -179,19 +191,43 @@ static UINT8 device_start_msm5232(const MSM5232_CFG* cfg, DEV_INFO* retDevInf)
     chip->sample_rate = chip->clock / CLOCK_RATE_DIVIDER;
     SRATE_CUSTOM_HIGHEST(cfg->_genCfg.srMode, chip->sample_rate, cfg->_genCfg.smplRate);
 
+	double db = 0.0;
+	double db_step = 0; /* 1.50 dB step (at least, maybe more) */
+	double db_step_inc = 0.125;
+	for (int i = 0; i < 16; i++)
+	{
+		double max = 100.0 / pow(10.0, db / 20.0);
+		chip->vol_ctrl[15 - i] = max / 100.0;
+		db += db_step;
+		db_step += db_step_inc;
+	}
+
     init_tables(chip);
     for (int i = 0; i < MSM5232_NUM_CHANNELS; i++)
     {
         init_voice(chip, i);
-        chip->voi[i].mute = 0;
     }
+    msm5232_set_mute_mask(chip, 0);
 
     chip->noise_rng = 1;
+	chip->noise_out = 0;
     chip->noise_cnt = 0;
     chip->noise_clocks = 0;
     chip->control1 = chip->control2 = 0;
     chip->EN_out16[0] = chip->EN_out8[0] = chip->EN_out4[0] = chip->EN_out2[0] = 0;
     chip->EN_out16[1] = chip->EN_out8[1] = chip->EN_out4[1] = chip->EN_out2[1] = 0;
+
+    // --- TA7630 external volume defaults: max (0) ---
+    chip->ext_vol[0] = 0;
+    chip->ext_vol[1] = 0;
+    chip->ext_vol_gain[0] = chip->vol_ctrl[0];
+    chip->ext_vol_gain[1] = chip->vol_ctrl[0];
+
+	// initialize per-output volume (0x80 = 100%)
+	for (int i = 0; i < MSM5232_NUM_OUTPUTS; i++)
+	{
+		chip->per_out_vol[i] = (i >= 8) ? 0 : 0x80;
+	}
 
     RC_SET_RATIO(&chip->cycle_cntr, chip->clock, chip->sample_rate);
     chip->_devData.chipInf = chip;
@@ -211,6 +247,7 @@ static void device_reset_msm5232(void* info)
     }
     chip->noise_cnt = 0;
     chip->noise_rng = 1;
+	chip->noise_out = 0;
     chip->noise_clocks = 0;
     chip->control1 = chip->control2 = 0;
     chip->EN_out16[0] = chip->EN_out8[0] = chip->EN_out4[0] = chip->EN_out2[0] = 0;
@@ -281,7 +318,8 @@ static void EG_voices_advance(MSM5232_STATE* chip)
 
 // Tone generator, closely following MAME's TG_group_advance
 typedef struct {
-	int o2, o4, o8, o16;
+	INT32 o2, o4, o8, o16;
+	INT32 solo8, solo16;
 } MSM5232_GROUP_OUT;
 
 static void TG_group_advance(MSM5232_STATE* chip, int groupidx, MSM5232_GROUP_OUT* out)
@@ -331,12 +369,19 @@ static void TG_group_advance(MSM5232_STATE* chip, int groupidx, MSM5232_GROUP_OU
 			if (chip->noise_clocks & 1) out2  += (1<<STEP_SH);
 		}
 		// Signed output
-		if (!v->mute)
+		if (!chip->Muted[(groupidx*4)+i])
 		{
 			out->o16 += ((out16 - (1 << (STEP_SH-1))) * v->egvol) >> STEP_SH;
 			out->o8  += ((out8  - (1 << (STEP_SH-1))) * v->egvol) >> STEP_SH;
 			out->o4  += ((out4  - (1 << (STEP_SH-1))) * v->egvol) >> STEP_SH;
 			out->o2  += ((out2  - (1 << (STEP_SH-1))) * v->egvol) >> STEP_SH;
+		}
+		if (i == 3 && groupidx == 1)
+		{
+			if (!chip->Muted[8])
+				out->solo16 += ((out16 - (1 << (STEP_SH-1))) << 11) >> STEP_SH;
+			if (!chip->Muted[9])
+				out->solo8  += ((out8  - (1 << (STEP_SH-1))) << 11) >> STEP_SH;
 		}
 	}
 	// Mask outputs
@@ -360,6 +405,7 @@ static void update_noise(MSM5232_STATE* chip)
 			chip->noise_clocks++;
 		cnt--;
 	}
+	chip->noise_out = ((!chip->Muted[10]) && (chip->noise_rng & (1<<16))) ? chip->per_out_vol[10] : 0;
 }
 
 // --- Main Update ---
@@ -381,21 +427,32 @@ static void device_update_msm5232(void* info, UINT32 samples, DEV_SMPL** outputs
 		TG_group_advance(chip, 0, &group1);
 		TG_group_advance(chip, 1, &group2);
 
-		// 3. Mix output (mono: sum all feet, or split for stereo as desired)
-		int32_t mix = group1.o2 + group1.o4 + group1.o8 + group1.o16 +
-		              group2.o2 + group2.o4 + group2.o8 + group2.o16;
-		// Optionally, use group1/group2 for L/R channels
-		outL[i] = (DEV_SMPL)(mix / 8); // normalize to 8 channels
-		outR[i] = (DEV_SMPL)(mix / 8);
-
-		// 4. Noise update (advance RNG)
+		// 3. Noise update (advance RNG)
 		update_noise(chip);
 
+		// 4. Mix output, apply TA7630 external volume
+		INT32 g1o2 = (group1.o2 * chip->per_out_vol[0]) >> 7;
+		INT32 g1o4 = (group1.o4 * chip->per_out_vol[1]) >> 7;
+		INT32 g1o8 = (group1.o8 * chip->per_out_vol[2]) >> 7;
+		INT32 g1o16 = (group1.o16 * chip->per_out_vol[3]) >> 7;
+		INT32 g2o2 = (group2.o2 * chip->per_out_vol[4]) >> 7;
+		INT32 g2o4 = (group2.o4 * chip->per_out_vol[5]) >> 7;
+		INT32 g2o8 = (group2.o8 * chip->per_out_vol[6]) >> 7;
+		INT32 g2o16 = (group2.o16 * chip->per_out_vol[7]) >> 7;
+		INT32 mix =
+			(INT32)((double)(g1o2 + g1o4 + g1o8 + g1o16) * chip->ext_vol_gain[0]) +
+			(INT32)((double)(g2o2 + g2o4 + g2o8 + g2o16) * chip->ext_vol_gain[1]) +
+			(((INT32)(group2.solo16) * chip->per_out_vol[8]) >> 7) +
+			(((INT32)(group2.solo8) * chip->per_out_vol[9]) >> 7) +
+			((INT32)chip->noise_out);
+
+		outL[i] = (DEV_SMPL)(mix / 8);
+		outR[i] = (DEV_SMPL)(mix / 8);
 		RC_MASK(&chip->cycle_cntr);
 	}
 }
 
-// --- Register Write Handler ---
+// --- Register Write Handler --- (add 0x0E/0x0F for TA7630 volume)
 static void msm5232_write(void* info, UINT8 reg, UINT8 value)
 {
     MSM5232_STATE* chip = (MSM5232_STATE*)info;
@@ -475,6 +532,29 @@ static void msm5232_write(void* info, UINT8 reg, UINT8 value)
 			chip->EN_out4[1]  = (value & 4) ? ~0 : 0;
 			chip->EN_out2[1]  = (value & 8) ? ~0 : 0;
 			break;
+		// --- TA7630 external volume for MSM5232 ---
+		case 0x0E: // external volume for group 1 (ch 0..3)
+			chip->ext_vol[0] = value & 0x0F;
+			chip->ext_vol_gain[0] = chip->vol_ctrl[value & 0x0F];
+			break;
+		case 0x0F: // external volume for group 2 (ch 4..7)
+			chip->ext_vol[1] = value & 0x0F;
+			chip->ext_vol_gain[1] = chip->vol_ctrl[value & 0x0F];
+			break;
+		// per output volume (0x80 = 100%)
+		case 0x10:
+		case 0x11:
+		case 0x12:
+		case 0x13:
+		case 0x14:
+		case 0x15:
+		case 0x16:
+		case 0x17:
+		case 0x18:
+		case 0x19:
+		case 0x1A:
+			chip->per_out_vol[reg & 0x0F] = (value > 0x80) ? 0x80 : value;
+			break;
 		}
 	}
 }
@@ -482,6 +562,6 @@ static void msm5232_write(void* info, UINT8 reg, UINT8 value)
 static void msm5232_set_mute_mask(void* info, UINT32 muteMask)
 {
 	MSM5232_STATE* chip = (MSM5232_STATE*)info;
-	for (int i = 0; i < MSM5232_NUM_CHANNELS; i++)
-		chip->voi[i].mute = (muteMask >> i) & 1;
+	for (int i = 0; i < MSM5232_NUM_OUTPUTS; i++)
+		chip->Muted[i] = (muteMask >> i) & 1;
 }
