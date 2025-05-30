@@ -44,9 +44,10 @@
 	
 ***********************************************************************************************/
 
-	
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>	// for NULL
+
 #include "../../stdtype.h"
 #include "../EmuStructs.h"
 #include "../SoundDevs.h"
@@ -97,7 +98,15 @@ static DEV_DEF devDef = {
     device_stop_k005289,
     device_reset_k005289,
     k005289_update,
-    NULL, NULL, NULL, NULL, NULL, NULL, devFunc
+
+    NULL,   // SetOptionBits
+    k005289_set_mute_mask,
+    NULL,   // SetPanning
+    NULL,   // SetSampleRateChangeCallback
+    NULL,   // SetLoggingCallback
+    NULL,   // LinkDevice
+
+    devFunc
 };
 
 static const char* DeviceName(const DEV_GEN_CFG* devCfg)
@@ -135,9 +144,10 @@ static UINT8 device_start_k005289(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf) {
     info->clock = cfg->clock;
     info->rate = info->clock;
     
-    memcpy(info->prom, k005289_write_prom, PROM_SIZE);
+    memset(info->prom, 0xFF, PROM_SIZE);
     
-    device_reset_k005289(info);
+    info->mute_mask = 0x00;
+    
     info->_devData.chipInf = info;
     INIT_DEVINF(retDevInf, &info->_devData, info->rate, &devDef);
     return 0x00;
@@ -152,19 +162,23 @@ static void device_stop_k005289(void* chip) {
 static void device_reset_k005289(void* chip) {
     k005289_state* info = (k005289_state*)chip;
     memset(info->voice, 0, sizeof(info->voice));
-    info->mute_mask = 0x00;
 }
 
 // Modified update function using internal PROM
 static void k005289_update(void* param, UINT32 samples, DEV_SMPL** outputs) {
     k005289_state* info = (k005289_state*)param;
     DEV_SMPL* buffer = outputs[0];
-	DEV_SMPL *buffer2 = outputs[1];
+    DEV_SMPL* buffer2 = outputs[1];
+    UINT32 i;
     
-    for (UINT32 i = 0; i < samples; i++) {
+    for (i = 0; i < samples; i++) {
         INT32 mix = 0;
+        int ch;
         
-        for (int ch = 0; ch < 2; ch++) {
+        for (ch = 0; ch < 2; ch++) {
+            UINT16 prom_addr;
+            INT8 sample;
+            
             if (info->mute_mask & (1 << ch)) continue;
             
             if (--info->voice[ch].counter < 0) {
@@ -172,10 +186,10 @@ static void k005289_update(void* param, UINT32 samples, DEV_SMPL** outputs) {
                 info->voice[ch].counter = info->voice[ch].freq;
             }
             
-            UINT16 prom_addr = (ch * 0x100) | 
-                            (info->voice[ch].waveform << 5) | 
-                            info->voice[ch].addr;
-            INT8 sample = info->prom[prom_addr] - 8; // Convert to signed
+            prom_addr = (ch * 0x100) |
+                        (info->voice[ch].waveform << 5) | 
+                        info->voice[ch].addr;
+            sample = info->prom[prom_addr] - 8; // Convert to signed
             mix += sample * info->voice[ch].volume;
         }
         
@@ -188,7 +202,7 @@ static void k005289_update(void* param, UINT32 samples, DEV_SMPL** outputs) {
 static void k005289_write(void* chip, UINT8 address, UINT16 data) {
     k005289_state* info = (k005289_state*)chip;
     int ch = address & 1; // Channel select
-	
+
         switch (address) {
         // Control A (Channel 1)
         case 0x00:

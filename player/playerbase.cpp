@@ -5,6 +5,8 @@
 
 PlayerBase::PlayerBase() :
 	_outSmplRate(0),
+	_userDevList(NULL),
+	_devStartOpts(0x00),
 	_eventCbFunc(NULL),
 	_eventCbParam(NULL),
 	_fileReqCbFunc(NULL),
