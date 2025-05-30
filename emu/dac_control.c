@@ -186,13 +186,15 @@ INLINE void daccontrol_SendCommand(dac_control* chip)
 	case DEVID_ES5503:
 	case DEVID_GA20:	// TODO: Verify
 	case DEVID_MIKEY:
+	case DEVID_MSM5205:
 		if (chip->Write.A8D8 == NULL)
 			return;
 		Command = (chip->DstCommand & 0x00FF) >> 0;
 		Data = ChipData[0x00];
 		chip->Write.A8D8(chip->chipData, Command, Data);
 		break;
-	case DEVID_MSM5205:
+
+	// 16-bit Register, 8-bit Data
 	case DEVID_YM2612:
 	case DEVID_YM2608:
 	case DEVID_YM2610:
