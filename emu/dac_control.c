@@ -191,12 +191,7 @@ INLINE void daccontrol_SendCommand(dac_control* chip)
 		Data = ChipData[0x00];
 		chip->Write.A8D8(chip->chipData, Command, Data);
 		break;
-	case DEVID_MSM5205: // eito hack
-		if (chip->Write.A8D8 == NULL)
-			return;
-		Data = ChipData[0x00];
-		chip->Write.A8D8(chip->chipData, 1, Data);
-		break;
+	case DEVID_MSM5205:
 	// 16-bit Register, 8-bit Data
 	case DEVID_YM2612:
 	case DEVID_YM2608:
