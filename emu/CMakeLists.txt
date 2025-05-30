@@ -81,8 +81,8 @@ option(SNDEMU_C352_ALL "Sound Device C352: all cores" OFF)
 option(SNDEMU_GA20_ALL "Sound Device Irem GA20: all cores" OFF)
 option(SNDEMU_MIKEY_ALL "Sound Device Mikey: all cores" OFF)
 option(SNDEMU_K007232_ALL "Sound Device K007232: all cores" OFF)
+option(SNDEMU_K005289_ALL "Sound Device K005289: all cores" OFF)
 option(SNDEMU_MSM5205_ALL "Sound Device MSM5205: all cores" OFF)
-
 
 # console/computer presets
 option(SNDEMU__PRESET_SMS "Sound Dev. Preset: Sega Master System/Game Gear" OFF)
@@ -143,7 +143,8 @@ if(SNDEMU__ALL)
 	set(SNDEMU_GA20_ALL ON)
 	set(SNDEMU_MIKEY_ALL ON)
  	set(SNDEMU_K007232_ALL ON)
-	set(SNDEMU_MSM5205_ALL ON)
+  set(SNDEMU_K005289_ALL ON)
+  set(SNDEMU_MSM5205_ALL ON)
 endif()
 
 
@@ -616,12 +617,16 @@ if(SNDEMU_K007232_ALL)
 	set(EMU_FILES ${EMU_FILES} cores/k007232.c)
 	set(EMU_CORE_HEADERS ${EMU_CORE_HEADERS} cores/k007232.h)
 endif()
+if(SNDEMU_K005289_ALL)
+	set(EMU_DEFS ${EMU_DEFS} " SNDDEV_K005289")
+	set(EMU_FILES ${EMU_FILES} cores/k005289.c)
+	set(EMU_CORE_HEADERS ${EMU_CORE_HEADERS} cores/k005289.h)
+endif()
 if(SNDEMU_MSM5205_ALL)
 	set(EMU_DEFS ${EMU_DEFS} " SNDDEV_MSM5205")
-	set(EMU_FILES ${EMU_FILES} cores/msm5205.c)
+  set(EMU_FILES ${EMU_FILES} cores/msm5205.c)
 	set(EMU_CORE_HEADERS ${EMU_CORE_HEADERS} cores/msm5205.h)
 endif()
-
 
 add_library(${PROJECT_NAME} ${LIBRARY_TYPE} ${EMU_FILES})
 set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
