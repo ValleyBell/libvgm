@@ -19,6 +19,12 @@
 
   Modifications for PINMAME by Steve Ellenoff & Martin Adrian & Carsten Waechter
 
+  References:
+  https://github.com/vpinball/pinmame/blob/master/src/sound/bsmt2000.c
+  https://github.com/vpinball/pinmame/blob/master/src/sound/bsmt2000.h
+  M1's BSMT2000 source code. https://vgmrips.net/forum/viewtopic.php?t=110
+  https://www.researchgate.net/publication/291338452_Hacking_a_Sega_Whitestar_Pinball
+  
 ***************************************************************************/
 
 #include <stdlib.h>
