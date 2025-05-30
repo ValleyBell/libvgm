@@ -304,6 +304,7 @@ const DEV_DECL* sndEmu_Devices[] = {
 #endif
 #ifdef SNDDEV_K007232
 	&sndDev_K007232,
+#endif
 #ifdef SNDDEV_BSMT2000
 	&sndDev_BSMT2000,
 #endif
