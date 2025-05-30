@@ -260,6 +260,7 @@ protected:
 	void Cmd_RF5C_Mem(void);				// command C1/C2 - RF5C68/164 memory write
 	void Cmd_RF5C_Reg(void);				// command B0/B1 - RF5C68/164 register write
 	void Cmd_PWM_Reg(void);					// command B2 - PWM register write (4-bit offset, 12-bit data)
+	void Cmd_K005289_Reg(void);				// command 42 - K005289 register write (4/8-bit offset, 12/16-bit data)
 	void Cmd_QSound_Reg(void);				// command C4 - QSound register write (16-bit data, 8-bit offset)
 	static void WriteQSound_A(CHIP_DEVICE* cDev, UINT8 ofs, UINT16 data);	// write by calling write8
 	static void WriteQSound_B(CHIP_DEVICE* cDev, UINT8 ofs, UINT16 data);	// write by calling writeD16
@@ -281,8 +282,8 @@ protected:
 	enum
 	{
 		_HDR_BUF_SIZE = 0x100,
-		_OPT_DEV_COUNT = 0x2b,
-		_CHIP_COUNT = 0x2b,
+		_OPT_DEV_COUNT = 0x2c,
+		_CHIP_COUNT = 0x2c,
 		_PCM_BANK_COUNT = 0x40
 	};
 	

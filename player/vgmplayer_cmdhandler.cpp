@@ -86,7 +86,7 @@
 	{0x00, 0x02, &VGMPlayer::Cmd_GGStereo},             // 3F GameGear stereo mask (2nd chip)
 	{0x29, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // 40 Mikey register write
 	{0x2A, 0x03, &VGMPlayer::Cmd_K007232_Reg},          // 41 K007232 register write
-	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 42
+	{0x2B, 0x03, &VGMPlayer::Cmd_K005289_Reg},          // 42 K005289 register write
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 43
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 44
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 45
@@ -421,7 +421,7 @@
 	0x05,	// C0 RF5C68
 	0x10,	// C1 RF5C164
 	0x14,	// C2 NES APU
-	0xFF,	// C3
+	0x2B,	// C3 K005289
 	0xFF,	// C4
 	0xFF,	// C5
 	0xFF,	// C6
@@ -1192,6 +1192,20 @@ void VGMPlayer::Cmd_PWM_Reg(void)
 		return;
 	
 	UINT8 ofs = (fData[0x01] >> 4) & 0x0F;
+	UINT16 value = ReadBE16(&fData[0x01]) & 0x0FFF;
+	cDev->writeD16(cDev->base.defInf.dataPtr, ofs, value);
+	return;
+}
+
+void VGMPlayer::Cmd_K005289_Reg(void)
+{
+	UINT8 chipType = _CMD_INFO[fData[0x00]].chipType;
+	UINT8 chipID = (fData[0x01] & 0x80) >> 7;
+	CHIP_DEVICE* cDev = GetDevicePtr(chipType, chipID);
+	if (cDev == NULL || cDev->writeD16 == NULL)
+		return;
+	
+	UINT8 ofs = (fData[0x01] >> 4) & 0x07;
 	UINT16 value = ReadBE16(&fData[0x01]) & 0x0FFF;
 	cDev->writeD16(cDev->base.defInf.dataPtr, ofs, value);
 	return;
