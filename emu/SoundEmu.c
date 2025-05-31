@@ -51,6 +51,7 @@
 #define SNDDEV_GA20
 #define SNDDEV_MIKEY
 #define SNDDEV_K007232
+#define SNDDEV_K005289
 #define SNDDEV_ICS2115
 #endif
 
@@ -170,6 +171,9 @@
 #endif
 #ifdef SNDDEV_K007232
 #include "cores/k007232.h"
+#endif
+#ifdef SNDDEV_K005289
+#include "cores/k005289.h"
 #endif
 #ifdef SNDDEV_K007232
 #include "cores/ics2115.h"
@@ -304,6 +308,9 @@ const DEV_DECL* sndEmu_Devices[] = {
 #endif
 #ifdef SNDDEV_K007232
 	&sndDev_K007232,
+#endif
+#ifdef SNDDEV_K005289
+	&sndDev_K005289,
 #endif
 #ifdef SNDDEV_ICS2115
 	&sndDev_ICS2115,
