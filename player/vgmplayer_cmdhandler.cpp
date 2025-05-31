@@ -86,7 +86,7 @@
 	{0x00, 0x02, &VGMPlayer::Cmd_GGStereo},             // 3F GameGear stereo mask (2nd chip)
 	{0x29, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // 40 Mikey register write
 	{0x2A, 0x03, &VGMPlayer::Cmd_K007232_Reg},          // 41 K007232 register write
-	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 42
+	{0x2B, 0x03, &VGMPlayer::Cmd_Ofs4_Data12},          // 42 K005289 register write
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 43
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 44
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 45
@@ -198,7 +198,7 @@
 	{0x0C, 0x03, &VGMPlayer::Cmd_CPort_Reg8_Data8},     // AF YMF262 register write, port 1 (2nd chip)
 	{0x05, 0x03, &VGMPlayer::Cmd_RF5C_Reg},             // B0 RF5C68 register write
 	{0x10, 0x03, &VGMPlayer::Cmd_RF5C_Reg},             // B1 RF5C164 register write
-	{0x11, 0x03, &VGMPlayer::Cmd_PWM_Reg},              // B2 PWM register write
+	{0x11, 0x03, &VGMPlayer::Cmd_Ofs4_Data12},          // B2 PWM register write
 	{0x13, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // B3 GameBoy DMG register write
 	{0x14, 0x03, &VGMPlayer::Cmd_NES_Reg},              // B4 NES APU register write
 	{0x15, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // B5 YMW258 (MultiPCM) register write
@@ -421,7 +421,7 @@
 	0x05,	// C0 RF5C68
 	0x10,	// C1 RF5C164
 	0x14,	// C2 NES APU
-	0xFF,	// C3
+	0x2B,	// C3 K005289
 	0xFF,	// C4
 	0xFF,	// C5
 	0xFF,	// C6
@@ -1183,15 +1183,15 @@ void VGMPlayer::Cmd_RF5C_Reg(void)
 	return;
 }
 
-void VGMPlayer::Cmd_PWM_Reg(void)
+void VGMPlayer::Cmd_Ofs4_Data12(void)
 {
 	UINT8 chipType = _CMD_INFO[fData[0x00]].chipType;
-	UINT8 chipID = 0;
+	UINT8 chipID = (fData[0x01] & 0x80) >> 7;
 	CHIP_DEVICE* cDev = GetDevicePtr(chipType, chipID);
 	if (cDev == NULL || cDev->writeD16 == NULL)
 		return;
 	
-	UINT8 ofs = (fData[0x01] >> 4) & 0x0F;
+	UINT8 ofs = (fData[0x01] >> 4) & 0x07;
 	UINT16 value = ReadBE16(&fData[0x01]) & 0x0FFF;
 	cDev->writeD16(cDev->base.defInf.dataPtr, ofs, value);
 	return;

@@ -259,7 +259,7 @@ protected:
 	void Cmd_SegaPCM_Mem(void);				// command C0 - SegaPCM memory write
 	void Cmd_RF5C_Mem(void);				// command C1/C2 - RF5C68/164 memory write
 	void Cmd_RF5C_Reg(void);				// command B0/B1 - RF5C68/164 register write
-	void Cmd_PWM_Reg(void);					// command B2 - PWM register write (4-bit offset, 12-bit data)
+	void Cmd_Ofs4_Data12(void);				// command B2/42 - PWM/K005289 register write (4-bit offset, 12-bit data)
 	void Cmd_QSound_Reg(void);				// command C4 - QSound register write (16-bit data, 8-bit offset)
 	static void WriteQSound_A(CHIP_DEVICE* cDev, UINT8 ofs, UINT16 data);	// write by calling write8
 	static void WriteQSound_B(CHIP_DEVICE* cDev, UINT8 ofs, UINT16 data);	// write by calling writeD16
