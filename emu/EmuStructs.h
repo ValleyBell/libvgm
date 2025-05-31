@@ -6,6 +6,10 @@ extern "C"
 {
 #endif
 
+#ifdef _MSC_VER
+#pragma warning (disable: 4200)	// disable warning for "T arr[];" in structs
+#endif
+
 #include "../stdtype.h"
 #include "snddef.h"
 

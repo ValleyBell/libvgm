@@ -107,6 +107,7 @@ INLINE void daccontrol_SendCommand(dac_control* chip)
 	switch(chip->DstChipType)
 	{
 	case DEVID_32X_PWM:	// 4-bit Register, 12-bit Data
+	case DEVID_K005289:
 		if (chip->Write.A8D16 == NULL)
 			return;
 		Port = (chip->DstCommand & 0x000F) >> 0;
@@ -423,6 +424,7 @@ void daccontrol_setup_chip(void* info, DEV_INFO* devInf, UINT8 ChType, UINT16 Co
 		break;
 	case DEVID_32X_PWM:
 	case DEVID_QSOUND:
+	case DEVID_K005289:
 		chip->CmdSize = 0x02;
 		break;
 	default:
