@@ -111,7 +111,8 @@ typedef struct
 	UINT8 ModData[0x20];
 
 	INT32 EffFreq[6];
-	INT32 Envelope[6];
+	INT32 EnvelopeValue[6];
+	INT32 EnvelopeReload[6];
 
 	UINT8 WavePos[6];
 	UINT8 ModWavePos;
@@ -127,6 +128,10 @@ typedef struct
 	INT32 IntervalClockDivider[6];
 	INT32 EnvelopeClockDivider[6];
 	INT32 SweepModClockDivider;
+
+	INT32 EnvelopeModMask[6];
+	INT32 ModState;
+	INT32 ModLock;
 
 	INT32 NoiseLatcherClockDivider;
 	UINT8 NoiseLatcher;
@@ -155,6 +160,8 @@ static void VSU_Power(vsu_state* chip)
 	chip->SweepControl = 0;
 	chip->SweepModCounter = 0;
 	chip->SweepModClockDivider = 1;
+	chip->ModState = 0;
+	chip->ModLock = 0;
 
 	for(ch = 0; ch < 6; ch++)
 	{
@@ -166,7 +173,9 @@ static void VSU_Power(vsu_state* chip)
 		chip->RAMAddress[ch] = 0;
 
 		chip->EffFreq[ch] = 0;
-		chip->Envelope[ch] = 0;
+		chip->EnvelopeReload[ch] = 0;
+		chip->EnvelopeValue[ch] = 0;
+		chip->EnvelopeModMask[ch] = 0;
 		chip->WavePos[ch] = 0;
 		chip->FreqCounter[ch] = 0;
 		chip->IntervalCounter[ch] = 0;
@@ -196,15 +205,25 @@ static void VSU_Write(void* info, UINT16 A, UINT8 V)
 	A <<= 2;
 	A &= 0x7FF;
 
+	chip->ModLock = 0;
+
 	//printf("VSU Write: %d, %08x %02x\n", timestamp, A, V);
 
 	if(A < 0x280)
-		chip->WaveData[A >> 7][(A >> 2) & 0x1F] = V & 0x3F;
+	{
+		bool cancel_write = false;
+		for(int i = 0; i < 6; i++)
+			if(chip->IntlControl[i] & 0x80)
+				cancel_write = true;
+		if(!cancel_write)
+			chip->WaveData[A >> 7][(A >> 2) & 0x1F] = V & 0x3F;
+	}
 	else if(A < 0x400)
 	{
 		//if(A >= 0x300)
 		// printf("Modulation mirror write? %08x %02x\n", A, V);
-		chip->ModData[(A >> 2) & 0x1F] = V;
+		if(!(chip->IntlControl[4] & 0x80))
+			chip->ModData[(A >> 2) & 0x1F] = V;
 	}
 	else if(A < 0x600)
 	{
@@ -231,7 +250,6 @@ static void VSU_Write(void* info, UINT16 A, UINT8 V)
 
 				if(V & 0x80)
 				{
-					chip->EffFreq[ch] = chip->Frequency[ch];
 					if(ch == 5)
 						chip->FreqCounter[ch] = 10 * (2048 - chip->EffFreq[ch]);
 					else
@@ -244,6 +262,7 @@ static void VSU_Write(void* info, UINT16 A, UINT8 V)
 						chip->SweepModCounter = (chip->SweepControl >> 4) & 7;
 						chip->SweepModClockDivider = (chip->SweepControl & 0x80) ? 8 : 1;
 						chip->ModWavePos = 0;
+						chip->ModState = 0;
 					}
 
 					chip->WavePos[ch] = 0;
@@ -251,8 +270,13 @@ static void VSU_Write(void* info, UINT16 A, UINT8 V)
 					if(ch == 5)
 						chip->lfsr = 1;
 
-					//if(!(chip->IntlControl[ch] & 0x80))
-					// chip->Envelope[ch] = (chip->EnvControl[ch] >> 4) & 0xF;
+					chip->EnvelopeModMask[ch] = 0;
+					if(!(chip->EnvControl[ch] & 0x200) && (
+						(chip->EnvelopeValue[ch] == 0 && !(chip->EnvControl[ch] & 0x0008)) ||
+						(chip->EnvelopeValue[ch] == 0xF && (chip->EnvControl[ch] & 0x0008))))
+					{
+						chip->EnvelopeModMask[ch] = 1;
+					}
 
 					chip->EffectsClockDivider[ch] = 4800;
 					chip->IntervalClockDivider[ch] = 4;
@@ -270,6 +294,7 @@ static void VSU_Write(void* info, UINT16 A, UINT8 V)
 				chip->Frequency[ch] |= V << 0;
 				chip->EffFreq[ch] &= 0xFF00;
 				chip->EffFreq[ch] |= V << 0;
+				chip->ModLock = 1;
 				break;
 
 			case 0x3:
@@ -277,13 +302,20 @@ static void VSU_Write(void* info, UINT16 A, UINT8 V)
 				chip->Frequency[ch] |= (V & 0x7) << 8;
 				chip->EffFreq[ch] &= 0x00FF;
 				chip->EffFreq[ch] |= (V & 0x7) << 8;
+				chip->ModLock = 2;
 				break;
 
 			case 0x4:
 				chip->EnvControl[ch] &= 0xFF00;
 				chip->EnvControl[ch] |= V << 0;
 
-				chip->Envelope[ch] = (V >> 4) & 0xF;
+				chip->EnvelopeReload[ch] = (V >> 4) & 0xF;
+				chip->EnvelopeValue[ch] = (V >> 4) & 0xF;
+
+				if(chip->EnvelopeModMask[ch] == 1)
+				{
+					chip->EnvelopeModMask[ch] = 2;
+				}
 				break;
 
 			case 0x5:
@@ -291,9 +323,19 @@ static void VSU_Write(void* info, UINT16 A, UINT8 V)
 				if(ch == 4)
 					chip->EnvControl[ch] |= (V & 0x73) << 8;
 				else if(ch == 5)
+				{
 					chip->EnvControl[ch] |= (V & 0x73) << 8;
+					chip->lfsr = 1;
+				}
 				else
 					chip->EnvControl[ch] |= (V & 0x03) << 8;
+
+				if(chip->EnvelopeModMask[ch] == 0 && !(chip->EnvControl[ch] & 0x200) && (
+					(chip->EnvelopeValue[ch] == 0 && !(chip->EnvControl[ch] & 0x0008)) ||
+					(chip->EnvelopeValue[ch] == 0xF && (chip->EnvControl[ch] & 0x0008))))
+				{
+					chip->EnvelopeModMask[ch] = 1;
+				}
 				break;
 
 			case 0x6:
@@ -327,14 +369,14 @@ INLINE void VSU_CalcCurrentOutput(vsu_state* chip, int ch, DEV_SMPL* left, DEV_S
 		else
 			WD = chip->WaveData[chip->RAMAddress[ch]][chip->WavePos[ch]];
 	}
-	l_ol = chip->Envelope[ch] * chip->LeftLevel[ch];
+	l_ol = chip->EnvelopeValue[ch] * chip->LeftLevel[ch];
 	if(l_ol)
 	{
 		l_ol >>= 3;
 		l_ol += 1;
 	}
 
-	r_ol = chip->Envelope[ch] * chip->RightLevel[ch];
+	r_ol = chip->EnvelopeValue[ch] * chip->RightLevel[ch];
 	if(r_ol)
 	{
 		r_ol >>= 3;
@@ -396,7 +438,7 @@ static void VSU_Update(vsu_state* chip, UINT32 clocks, DEV_SMPL* outleft, DEV_SM
 			{
 				if(ch == 5)
 				{
-					int feedback = ((chip->lfsr >> 7) & 1) ^ ((chip->lfsr >> Tap_LUT[(chip->EnvControl[5] >> 12) & 0x7]) & 1);
+					int feedback = ((chip->lfsr >> 7) & 1) ^ ((chip->lfsr >> Tap_LUT[(chip->EnvControl[5] >> 12) & 0x7]) & 1) ^ 1;
 					chip->lfsr = ((chip->lfsr << 1) & 0x7FFF) | feedback;
 
 					chip->FreqCounter[ch] += 10 * (2048 - chip->EffFreq[ch]);
@@ -446,23 +488,27 @@ static void VSU_Update(vsu_state* chip, UINT32 clocks, DEV_SMPL* outleft, DEV_SM
 					{
 						chip->EnvelopeClockDivider[ch] += 4;
 
+						INT32 new_envelope = chip->EnvelopeValue[ch];
+						if(chip->EnvelopeValue[ch] < 0xF &&(chip->EnvControl[ch] & 0x0008))
+							new_envelope++;
+						else if(chip->EnvelopeValue[ch] > 0 && !(chip->EnvControl[ch] & 0x0008))
+							new_envelope--;
+						else if((chip->EnvControl[ch] & 0x200) && chip->EnvelopeModMask[ch] != 2)
+						{
+							new_envelope = chip->EnvelopeReload[ch];
+							chip->EnvelopeModMask[ch] = 0;
+						}
+						else if(chip->EnvelopeModMask[ch] == 0)
+							chip->EnvelopeModMask[ch] = 1;
+
 						if(chip->EnvControl[ch] & 0x0100)			// Enveloping enabled?
 						{
 							chip->EnvelopeCounter[ch]--;
 							if(!chip->EnvelopeCounter[ch])
 							{
 								chip->EnvelopeCounter[ch] = (chip->EnvControl[ch] & 0x7) + 1;
-
-								if(chip->EnvControl[ch] & 0x0008)	// Grow
-								{
-									if(chip->Envelope[ch] < 0xF || (chip->EnvControl[ch] & 0x200))
-										chip->Envelope[ch] = (chip->Envelope[ch] + 1) & 0xF;
-								}
-								else						// Decay
-								{
-									if(chip->Envelope[ch] > 0 || (chip->EnvControl[ch] & 0x200))
-										chip->Envelope[ch] = (chip->Envelope[ch] - 1) & 0xF;
-								}
+								if(chip->EnvelopeModMask[ch] == 0)
+									chip->EnvelopeValue[ch] = new_envelope;
 							}
 						}
 
@@ -471,6 +517,18 @@ static void VSU_Update(vsu_state* chip, UINT32 clocks, DEV_SMPL* outleft, DEV_SM
 
 				if(ch == 4)
 				{
+					// Calculate sweep early
+					INT32 delta = chip->EffFreq[ch] >> (chip->SweepControl & 0x7);
+					INT32 NewSweepFreq = chip->EffFreq[ch] + ((chip->SweepControl & 0x8) ? delta : -delta);
+
+					if(!(chip->EnvControl[ch] & 0x1000))
+					{
+						if(NewSweepFreq < 0)
+							NewSweepFreq = 0;
+						else if(NewSweepFreq > 0x7FF)
+							chip->IntlControl[ch] &= ~0x80;
+					}
+
 					chip->SweepModClockDivider--;
 					while(chip->SweepModClockDivider <= 0)
 					{
@@ -487,41 +545,27 @@ static void VSU_Update(vsu_state* chip, UINT32 clocks, DEV_SMPL* outleft, DEV_SM
 
 								if(chip->EnvControl[ch] & 0x1000)	// Modulation
 								{
-									if(chip->ModWavePos < 32 || (chip->EnvControl[ch] & 0x2000))
-									{
-										chip->ModWavePos &= 0x1F;
-
-										chip->EffFreq[ch] = (chip->EffFreq[ch] + (INT8)chip->ModData[chip->ModWavePos]);
-										if(chip->EffFreq[ch] < 0)
-										{
-											//puts("Underflow");
-											chip->EffFreq[ch] = 0;
-										}
-										else if(chip->EffFreq[ch] > 0x7FF)
-										{
-											//puts("Overflow");
-											chip->EffFreq[ch] = 0x7FF;
-										}
-										chip->ModWavePos++;
-									}
-									//puts("Mod");
+									if(chip->ModState == 0 || (chip->EnvControl[ch] & 0x2000))
+										chip->EffFreq[ch] = (chip->Frequency[ch] + (INT8)chip->ModData[chip->ModWavePos]) & 0x7FF;
+									if(chip->ModState == 1)
+										chip->ModState = 2;
+									
+									// Hardware bug: writing to S5FQ* locks the relevant byte when modulating
+									if(chip->ModLock == 1)
+										chip->EffFreq[ch] = (chip->EffFreq[ch] & 0x700) | (chip->Frequency[ch] & 0xFF);
+									else if(chip->ModLock == 2)
+										chip->EffFreq[ch] = (chip->EffFreq[ch] & 0xFF) | (chip->Frequency[ch] & 0x700);
 								}
-								else						// Sweep
+								else if(chip->ModState < 2)						// Sweep
 								{
-									INT32 delta = chip->EffFreq[ch] >> (chip->SweepControl & 0x7);
-									INT32 NewFreq = chip->EffFreq[ch] + ((chip->SweepControl & 0x8) ? delta : -delta);
+									chip->EffFreq[ch] = NewSweepFreq;
+								}
 
-									//printf("Sweep(%d): Old: %d, New: %d\n", ch, EffFreq[ch], NewFreq);
-
-									if(NewFreq < 0)
-										chip->EffFreq[ch] = 0;
-									else if(NewFreq > 0x7FF)
-									{
-										//chip->EffFreq[ch] = 0x7FF;
-										chip->IntlControl[ch] &= ~0x80;
-									}
-									else
-										chip->EffFreq[ch] = NewFreq;
+								if(++chip->ModWavePos >= 32)
+								{
+									if(chip->ModState == 0)
+										chip->ModState = 1;
+									chip->ModWavePos = 0;
 								}
 							}
 						}
