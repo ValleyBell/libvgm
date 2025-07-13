@@ -1293,8 +1293,8 @@ void VGMPlayer::GenerateDeviceConfig(void)
 					MSM5205_CFG okiCfg;
 
 					okiCfg._genCfg = devCfg;
-					okiCfg.prescaler = (_hdrBuffer[0x97] & 0x03) >> 0;
-					okiCfg.adpcmBits = (_hdrBuffer[0x97] & 0x04) ? MSM5205_ADPCM_4B : MSM5205_ADPCM_3B;
+					okiCfg.prescaler = (_hdrBuffer[0xD7] & 0x03) >> 0;
+					okiCfg.adpcmBits = (_hdrBuffer[0xD7] & 0x04) ? MSM5205_ADPCM_4B : MSM5205_ADPCM_3B;
 
 					SaveDeviceConfig(sdCfg.cfgData, &okiCfg, sizeof(MSM5205_CFG));
 				}

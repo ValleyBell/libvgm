@@ -79,11 +79,8 @@
 #include "../dac_control.h"
 #include "msm5205.h"
 
-#define PIN_RESET   0x01
-#define PIN_4B3B    0x01
 #define PIN_S2      0x02
 #define PIN_S1      0x01
-#define PIN_DATA    0x0F
 
 // ========== Function Prototypes ==========
 static UINT8 device_start_msm5205(const MSM5205_CFG *cfg, DEV_INFO *retDevInf);
@@ -121,7 +118,7 @@ typedef struct _msm5205_state {
     UINT8   Muted;
 
     UINT8   is_msm6585; // 0 = MSM5205, 1 = MSM6585
-	
+
     DEVCB_SRATE_CHG SmpRateFunc;
     void*   SmpRateData;
 } msm5205_state;
@@ -142,17 +139,20 @@ static DEVDEF_RWFUNC devFunc[] = {
 
 static DEV_DEF devDef = {
     "MSM5205", "eito", FCC_EITO,
+
     (DEVFUNC_START)device_start_msm5205,
     device_stop_msm5205,
     device_reset_msm5205,
     msm5205_update,
-    NULL,
+
+    NULL,   // SetOptionBits
     msm5205_set_mute_mask,
-    NULL,
-    msm5205_set_srchg_cb,
-    msm5205_set_log_cb,
-    NULL,
-    devFunc
+    NULL,   // SetPanning
+    msm5205_set_srchg_cb,	// SetSampleRateChangeCallback
+    msm5205_set_log_cb,		// SetLoggingCallback
+    NULL,   // LinkDevice
+
+    devFunc	// rwFuncs
 };
 
 static const char* DeviceName(const DEV_GEN_CFG* devCfg)
@@ -228,8 +228,8 @@ static INT16 clock_adpcm(msm5205_state *chip, UINT8 data) {
         return 0;
     }
     
-    if (!(chip->bitwidth & PIN_4B3B)) data <<= 1;
-    data &= PIN_DATA;
+    if (chip->bitwidth == 3) data <<= 1;
+    data &= 0x0F;
 
     int sample = diff_lookup[chip->step * 16 + (data & 15)];
     chip->signal = ((sample << 8) + (chip->signal * 245)) >> 8;
@@ -262,6 +262,8 @@ static UINT8 device_start_msm5205(const MSM5205_CFG *cfg, DEV_INFO *retDevInf) {
     info->init_prescaler = cfg->prescaler;
     info->prescaler = info->init_prescaler;
     info->init_bitwidth = cfg->adpcmBits;
+    if (! info->init_bitwidth)
+        info->init_bitwidth = 4;
     info->bitwidth = info->init_bitwidth;
     info->data_buf[0] = 0;
     info->is_msm6585 = (cfg->_genCfg.flags & 0x01); // new flag!
@@ -329,10 +331,12 @@ static void msm5205_write(void *chip, UINT8 offset, UINT8 data) {
             UINT8 old = info->reset;
             info->reset = data;
             
-            if ((old ^ data) & PIN_RESET) {
+            if (old ^ data) {
                 info->signal = 0;
                 info->step = 0;
             }
+            if (info->reset)
+                info->data_buf_pos = 0;
             break;
         }
         case 1: /* data_w */ {
@@ -379,7 +383,7 @@ static void msm5205_write(void *chip, UINT8 offset, UINT8 data) {
             break;
         }
         case 5: /* set bitwidth */ {
-            info->bitwidth = data;
+            info->bitwidth = data ? 4 : 3;
             break;
         }
     }
