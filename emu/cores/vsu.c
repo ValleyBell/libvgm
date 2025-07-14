@@ -35,6 +35,7 @@ static void device_reset_vsu(void *info);
 
 static void VSU_Write(void* info, UINT16 A, UINT8 V);
 
+static void vsu_set_options(void* info, UINT32 Options);
 static void vsu_set_mute_mask(void *info, UINT32 MuteMask);
 
 
@@ -54,7 +55,7 @@ static DEV_DEF devDef =
 	device_reset_vsu,
 	vsu_stream_update,
 	
-	NULL,	// SetOptionBits
+	vsu_set_options,	// SetOptionBits
 	vsu_set_mute_mask,
 	NULL,	// SetPanning
 	NULL,	// SetSampleRateChangeCallback
@@ -142,6 +143,7 @@ typedef struct
 	UINT32 smplrate;
 	RATIO_CNTR cycleCntr;
 
+	UINT8 allowWavWriteWhileOn;
 	UINT8 Muted[6];
 } vsu_state;
 
@@ -211,12 +213,14 @@ static void VSU_Write(void* info, UINT16 A, UINT8 V)
 
 	if(A < 0x280)
 	{
-		bool cancel_write = false;
-		for(int i = 0; i < 6; i++)
-			if(chip->IntlControl[i] & 0x80)
-				cancel_write = true;
-		if(!cancel_write)
-			chip->WaveData[A >> 7][(A >> 2) & 0x1F] = V & 0x3F;
+		if (!chip->allowWavWriteWhileOn)
+		{
+			int i;
+			for(i = 0; i < 6; i++)
+				if(chip->IntlControl[i] & 0x80)
+					return;
+		}
+		chip->WaveData[A >> 7][(A >> 2) & 0x1F] = V & 0x3F;
 	}
 	else if(A < 0x400)
 	{
@@ -619,6 +623,7 @@ static UINT8 device_start_vsu(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 	
 	RC_SET_RATIO(&chip->cycleCntr, cfg->clock, chip->smplrate);
 	
+	chip->allowWavWriteWhileOn = 0;
 	vsu_set_mute_mask(chip, 0x00);
 	
 	chip->_devData.chipInf = chip;
@@ -642,6 +647,15 @@ static void device_reset_vsu(void* info)
 	
 	VSU_Power(chip);
 	
+	return;
+}
+
+static void vsu_set_options(void* info, UINT32 Options)
+{
+	vsu_state* chip = (vsu_state*)info;
+
+	chip->allowWavWriteWhileOn = (Options >> 0) & 0x01;
+
 	return;
 }
 
