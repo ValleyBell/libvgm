@@ -79,8 +79,8 @@
 #include "../dac_control.h"
 #include "msm5205.h"
 
-#define PIN_S2      0x02
 #define PIN_S1      0x01
+#define PIN_S2      0x02
 
 // ========== Function Prototypes ==========
 static UINT8 device_start_msm5205(const MSM5205_CFG *cfg, DEV_INFO *retDevInf);
@@ -192,12 +192,14 @@ static void compute_tables(void) {
         {-1,0,0,0}, {-1,0,0,1}, {-1,0,1,0}, {-1,0,1,1},
         {-1,1,0,0}, {-1,1,0,1}, {-1,1,1,0}, {-1,1,1,1}
     };
+    int step;
 
     if (tables_computed) return;
 
-    for (int step = 0; step <= 48; step++) {
+    for (step = 0; step <= 48; step++) {
         int stepval = (int)floor(16.0 * pow(11.0 / 10.0, (double)step));
-        for (int nib = 0; nib < 16; nib++) {
+        int nib;
+        for (nib = 0; nib < 16; nib++) {
             diff_lookup[step*16 + nib] = nbl2bit[nib][0] *
                 (stepval   * nbl2bit[nib][1] +
                  stepval/2 * nbl2bit[nib][2] +
@@ -222,16 +224,18 @@ INLINE UINT32 get_prescaler(msm5205_state *info) {
 
 // ========== Core ADPCM Processing ==========
 static INT16 clock_adpcm(msm5205_state *chip, UINT8 data) {
+    int sample;
+
     if (chip->reset) {
         chip->step = 0;
         chip->signal = 0;
         return 0;
     }
-    
+
     if (chip->bitwidth == 3) data <<= 1;
     data &= 0x0F;
 
-    int sample = diff_lookup[chip->step * 16 + (data & 15)];
+    sample = diff_lookup[chip->step * 16 + (data & 15)];
     chip->signal = ((sample << 8) + (chip->signal * 245)) >> 8;
 
     chip->signal = (chip->signal > 2047) ? 2047 : 
@@ -241,7 +245,7 @@ static INT16 clock_adpcm(msm5205_state *chip, UINT8 data) {
     chip->step = (chip->step > 48) ? 48 : 
                 ((chip->step < 0) ? 0 : chip->step);
     
-    return (INT16)(chip->signal << 4);
+    return (INT16)chip->signal;
 }
 
 // ========== Device Interface ==========
@@ -313,11 +317,11 @@ static void msm5205_update(void *param, UINT32 samples, DEV_SMPL **outputs) {
                 sample = clock_adpcm(info, data);
                 info->data_buf_pos = (write_pos << 4) | ((read_pos + 1) & 0x07);
             } else {
-                sample = (INT16)(info->signal << 4);
+                sample = (INT16)info->signal;
             }
         }
         
-        bufL[i] = bufR[i] = sample;
+        bufL[i] = bufR[i] = (DEV_SMPL)sample << 4;
     }
 }
 

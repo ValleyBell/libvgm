@@ -490,9 +490,10 @@ static void VSU_Update(vsu_state* chip, UINT32 clocks, DEV_SMPL* outleft, DEV_SM
 					chip->EnvelopeClockDivider[ch]--;
 					while(chip->EnvelopeClockDivider[ch] <= 0)
 					{
+						INT32 new_envelope;
 						chip->EnvelopeClockDivider[ch] += 4;
 
-						INT32 new_envelope = chip->EnvelopeValue[ch];
+						new_envelope = chip->EnvelopeValue[ch];
 						if(chip->EnvelopeValue[ch] < 0xF &&(chip->EnvControl[ch] & 0x0008))
 							new_envelope++;
 						else if(chip->EnvelopeValue[ch] > 0 && !(chip->EnvControl[ch] & 0x0008))
