@@ -420,12 +420,13 @@ static UINT32 DoDataForwarding(void* drvStruct, void* userParam, UINT32 bufSize,
 	ADRV_INSTANCE* audInst = (ADRV_INSTANCE*)drvStruct;
 	ADRV_LIST* fwdList;
 	const ADRV_INSTANCE* fwdInst;
-	UINT32 dataSize;
+	UINT32 dataSize = 0;
 	
 	OSMutex_Lock(audInst->hMutex);
 	// Using audInst->userParam instead of the userParam parameter makes
 	// later changes of the userParam via SetCallback work properly.
-	dataSize = audInst->mainCallback(drvStruct, audInst->userParam, bufSize, data);	// fill buffer
+	if (audInst->mainCallback != NULL)
+		dataSize = audInst->mainCallback(drvStruct, audInst->userParam, bufSize, data);	// fill buffer
 	fwdList = audInst->forwardDrvs;
 	while(fwdList != NULL)
 	{
@@ -447,11 +448,11 @@ UINT8 AudioDrv_SetCallback(void* drvStruct, AUDFUNC_FILLBUF FillBufCallback, voi
 	OSMutex_Lock(audInst->hMutex);
 	audInst->userParam = userParam;
 	audInst->mainCallback = FillBufCallback;
+	OSMutex_Unlock(audInst->hMutex);	// workaround for deadlock
 	if (audInst->forwardDrvs != NULL && audInst->mainCallback != NULL)
 		retVal = aDrv->SetCallback(audInst->drvData, &DoDataForwarding, audInst->userParam);
 	else
 		retVal = aDrv->SetCallback(audInst->drvData, audInst->mainCallback, audInst->userParam);
-	OSMutex_Unlock(audInst->hMutex);
 	return retVal;
 }
 
