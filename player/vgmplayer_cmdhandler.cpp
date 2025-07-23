@@ -87,7 +87,7 @@
 	{0x29, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // 40 Mikey register write
 	{0x2A, 0x03, &VGMPlayer::Cmd_K007232_Reg},          // 41 K007232 register write
 	{0x2B, 0x03, &VGMPlayer::Cmd_Ofs4_Data12},          // 42 K005289 register write
-	{0x2B, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // 43 ICS2115 register write
+	{0x2D, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // 43 ICS2115 register write
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 44
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 45
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 46
