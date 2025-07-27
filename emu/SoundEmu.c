@@ -52,6 +52,7 @@
 #define SNDDEV_MIKEY
 #define SNDDEV_K007232
 #define SNDDEV_K005289
+#define SNDDEV_MSM5205
 #define SNDDEV_MSM5232
 #endif
 
@@ -174,6 +175,9 @@
 #endif
 #ifdef SNDDEV_K005289
 #include "cores/k005289.h"
+#endif
+#ifdef SNDDEV_MSM5205
+#include "cores/msm5205.h"
 #endif
 #ifdef SNDDEV_MSM5232
 #include "cores/msm5232.h"
@@ -311,6 +315,9 @@ const DEV_DECL* sndEmu_Devices[] = {
 #endif
 #ifdef SNDDEV_K005289
 	&sndDev_K005289,
+#endif
+#ifdef SNDDEV_MSM5205
+	&sndDev_MSM5205,
 #endif
 #ifdef SNDDEV_MSM5232
 	&sndDev_MSM5232,

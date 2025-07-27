@@ -24,6 +24,7 @@
 #include "../emu/cores/c140.h"
 #include "../emu/cores/qsoundintf.h"
 #include "../emu/cores/scsp.h"
+#include "../emu/cores/msm5205.h"		// for MSM5205_CFG
 #include "../emu/cores/msm5232.h"		//for MSM5232_CFG
 
 #include "dblk_compr.h"
@@ -42,7 +43,7 @@
 	DEVID_32X_PWM, DEVID_AY8910, DEVID_GB_DMG, DEVID_NES_APU, DEVID_YMW258, DEVID_uPD7759, DEVID_OKIM6258, DEVID_OKIM6295,
 	DEVID_K051649, DEVID_K054539, DEVID_C6280, DEVID_C140, DEVID_C219, DEVID_K053260, DEVID_POKEY, DEVID_QSOUND,
 	DEVID_SCSP, DEVID_WSWAN, DEVID_VBOY_VSU, DEVID_SAA1099, DEVID_ES5503, DEVID_ES5506, DEVID_X1_010, DEVID_C352,
-	DEVID_GA20, DEVID_MIKEY, DEVID_K007232, DEVID_K005289, DEVID_MSM5232, 
+	DEVID_GA20, DEVID_MIKEY, DEVID_K007232, DEVID_K005289, DEVID_MSM5205, DEVID_MSM5232, 
 };
 
 /*static*/ const DEV_ID VGMPlayer::_DEV_LIST[_CHIP_COUNT] =
@@ -52,7 +53,7 @@
 	DEVID_RF5C68, DEVID_32X_PWM, DEVID_AY8910, DEVID_GB_DMG, DEVID_NES_APU, DEVID_YMW258, DEVID_uPD7759, DEVID_OKIM6258,
 	DEVID_OKIM6295, DEVID_K051649, DEVID_K054539, DEVID_C6280, DEVID_C140, DEVID_K053260, DEVID_POKEY, DEVID_QSOUND,
 	DEVID_SCSP, DEVID_WSWAN, DEVID_VBOY_VSU, DEVID_SAA1099, DEVID_ES5503, DEVID_ES5506, DEVID_X1_010, DEVID_C352,
-	DEVID_GA20, DEVID_MIKEY, DEVID_K007232, DEVID_K005289, DEVID_MSM5232, 
+	DEVID_GA20, DEVID_MIKEY, DEVID_K007232, DEVID_K005289, DEVID_MSM5205, DEVID_MSM5232, 
 };
 
 /*static*/ const UINT32 VGMPlayer::_CHIPCLK_OFS[_CHIP_COUNT] =
@@ -62,7 +63,7 @@
 	0x6C, 0x70, 0x74, 0x80, 0x84, 0x88, 0x8C, 0x90,
 	0x98, 0x9C, 0xA0, 0xA4, 0xA8, 0xAC, 0xB0, 0xB4,
 	0xB8, 0xC0, 0xC4, 0xC8, 0xCC, 0xD0, 0xD8, 0xDC,
-	0xE0, 0xE4, 0xE8, 0xEC, 0xF0, 
+	0xE0, 0xE4, 0xE8, 0xEC, 0xF0, 0xF4, 
 };
 /*static*/ const UINT16 VGMPlayer::_CHIP_VOLUME[_CHIP_COUNT] =
 {	0x80, 0x200, 0x100, 0x100, 0x180, 0xB0, 0x100, 0x80,
@@ -70,7 +71,7 @@
 	0x80, 0xE0, 0x100, 0xC0, 0x100, 0x40, 0x11E, 0x1C0,
 	0x100, 0xA0, 0x100, 0x100, 0x100, 0x100, 0x100, 0x100,
 	0x20, 0x100, 0x100, 0x100, 0x40, 0x20, 0x100, 0x40,
-	0x280, 0x100, 0x100, 0x100, 0x1000, 
+	0x280, 0x100, 0x100, 0x100, 0x100, 0x1000, 
 };
 /*static*/ const UINT16 VGMPlayer::_PB_VOL_AMNT[_CHIP_COUNT] =
 {	0x100, 0x80, 0x100, 0x100, 0x100, 0x100, 0x100, 0x100,
@@ -78,7 +79,7 @@
 	0x200, 0x100, 0x200, 0x400, 0x200, 0x400, 0x100, 0x200,
 	0x200, 0x100, 0x100, 0x100, 0x180, 0x100, 0x100, 0x100,
 	0x800, 0x100, 0x100, 0x100, 0x800, 0x1000, 0x100, 0x800,
-	0x100, 0x200, 0x100, 0x100, 0x10, 
+	0x100, 0x200, 0x100, 0x100, 0x200, 0x10, 
 };
 
 /*static*/ const char* const VGMPlayer::_TAG_TYPE_LIST[_TAG_COUNT] =
@@ -1299,6 +1300,17 @@ void VGMPlayer::GenerateDeviceConfig(void)
 					chipType = DEVID_C140;
 				}
 				SaveDeviceConfig(sdCfg.cfgData, &devCfg, sizeof(DEV_GEN_CFG));
+				break;
+			case DEVID_MSM5205:
+				{
+					MSM5205_CFG okiCfg;
+
+					okiCfg._genCfg = devCfg;
+					okiCfg.prescaler = (_hdrBuffer[0xD7] & 0x03) >> 0;
+					okiCfg.adpcmBits = (_hdrBuffer[0xD7] & 0x04) ? MSM5205_ADPCM_4B : MSM5205_ADPCM_3B;
+
+					SaveDeviceConfig(sdCfg.cfgData, &okiCfg, sizeof(MSM5205_CFG));
+				}
 				break;
 			case DEVID_C352:
 				devCfg.clock = devCfg.clock * 72 / _hdrBuffer[0xD6];	// real clock = VGM clock / (VGM clkDiv * 4) * 288
