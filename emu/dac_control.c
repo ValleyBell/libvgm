@@ -186,6 +186,7 @@ INLINE void daccontrol_SendCommand(dac_control* chip)
 	case DEVID_ES5503:
 	case DEVID_GA20:	// TODO: Verify
 	case DEVID_MIKEY:
+	case DEVID_MSM5205:
 		if (chip->Write.A8D8 == NULL)
 			return;
 		Command = (chip->DstCommand & 0x00FF) >> 0;
