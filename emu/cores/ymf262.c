@@ -749,8 +749,14 @@ INLINE void advance(OPL3 *chip)
 
 	for (i=0; i<9*2*2; i++)
 	{
-		CH  = &chip->P_CH[i/2];
+		int chan_no = i/2;
+		CH  = &chip->P_CH[chan_no];
 		op  = &CH->SLOT[i&1];
+		if (chan_no == 3 || chan_no == 4 || chan_no == 5 || chan_no == 12 || chan_no == 13 || chan_no == 14)
+		{
+			if ((CH-3)->extended)
+				CH = CH-3;	// take frequency from channels 0/1/2/9/10/11
+		}
 
 		/* Phase Generator */
 		if(op->vib)
@@ -1414,7 +1420,7 @@ INLINE void set_mul(OPL3 *chip,int slot,int v)
 	SLOT->vib     = (v&0x40);
 	SLOT->AMmask  = (v&0x80) ? ~0 : 0;
 
-	if (chip->OPL3_mode & 1)
+	// Note: 4-op mode is staying intact even when switching back to OPL2 mode. -Valley Bell
 	{
 		int chan_no = slot/2;
 
@@ -1461,11 +1467,6 @@ INLINE void set_mul(OPL3 *chip,int slot,int v)
 		break;
 		}
 	}
-	else
-	{
-		/* in OPL2 mode */
-		CALC_FCSLOT(CH,SLOT);
-	}
 }
 
 /* set ksl & tl */
@@ -1477,7 +1478,7 @@ INLINE void set_ksl_tl(OPL3 *chip,int slot,int v)
 	SLOT->ksl = ksl_shift[v >> 6];
 	SLOT->TL  = (v&0x3f)<<(ENV_BITS-1-7); /* 7 bits TL (bit 6 = always 0) */
 
-	if (chip->OPL3_mode & 1)
+	// Note: 4-op mode is staying intact even when switching back to OPL2 mode. -Valley Bell
 	{
 		int chan_no = slot/2;
 
@@ -1524,12 +1525,6 @@ INLINE void set_ksl_tl(OPL3 *chip,int slot,int v)
 		break;
 		}
 	}
-	else
-	{
-		/* in OPL2 mode */
-		SLOT->TLL = SLOT->TL + (CH->ksl_base>>SLOT->ksl);
-	}
-
 }
 
 /* set attack rate & decay rate  */
@@ -1574,18 +1569,53 @@ INLINE void set_sl_rr(OPL3 *chip,int slot,int v)
 }
 
 
-static void update_channels(OPL3 *chip, OPL3_CH *CH)
+static void update_channels(OPL3 *chip, int chan_no, OPL3_CH *CH)
 {
 	/* update channel passed as a parameter and a channel at CH+=3; */
 	if (CH->extended)
 	{	/* we've just switched to combined 4 operator mode */
-
+		UINT8 conn = (CH->SLOT[SLOT1].CON<<1) | ((CH+3)->SLOT[SLOT1].CON<<0);
+		switch(conn)
+		{
+		case 0:
+			/* 1 -> 2 -> 3 -> 4 - out */
+			CH->SLOT[SLOT1].connect = &chip->phase_modulation;
+			CH->SLOT[SLOT2].connect = &chip->phase_modulation2;
+			(CH+3)->SLOT[SLOT1].connect = &chip->phase_modulation;
+			(CH+3)->SLOT[SLOT2].connect = &chip->chanout[ chan_no + 3 ];
+			break;
+		case 1:
+			/* 1 -> 2 -\
+			3 -> 4 -+- out */
+			CH->SLOT[SLOT1].connect = &chip->phase_modulation;
+			CH->SLOT[SLOT2].connect = &chip->chanout[ chan_no ];
+			(CH+3)->SLOT[SLOT1].connect = &chip->phase_modulation;
+			(CH+3)->SLOT[SLOT2].connect = &chip->chanout[ chan_no + 3 ];
+			break;
+		case 2:
+			/* 1 -----------\
+			2 -> 3 -> 4 -+- out */
+			CH->SLOT[SLOT1].connect = &chip->chanout[ chan_no ];
+			CH->SLOT[SLOT2].connect = &chip->phase_modulation2;
+			(CH+3)->SLOT[SLOT1].connect = &chip->phase_modulation;
+			(CH+3)->SLOT[SLOT2].connect = &chip->chanout[ chan_no + 3 ];
+			break;
+		case 3:
+			/* 1 ------\
+			2 -> 3 -+- out
+			4 ------/     */
+			CH->SLOT[SLOT1].connect = &chip->chanout[ chan_no ];
+			CH->SLOT[SLOT2].connect = &chip->phase_modulation2;
+			(CH+3)->SLOT[SLOT1].connect = &chip->chanout[ chan_no + 3 ];
+			(CH+3)->SLOT[SLOT2].connect = &chip->chanout[ chan_no + 3 ];
+			break;
+		}
 	}
 	else
 	{	/* we've just switched to normal 2 operator mode */
-
+		CH->SLOT[SLOT1].connect = CH->SLOT[SLOT1].CON ? &chip->chanout[chan_no] : &chip->phase_modulation;
+		CH->SLOT[SLOT2].connect = &chip->chanout[chan_no];
 	}
-
 }
 
 /* write a value v to register r on OPL chip */
@@ -1606,41 +1636,25 @@ static void OPL3WriteReg(OPL3 *chip, int r, int v)
 
 		case 0x104: /* 6 channels enable */
 			{
-				UINT8 prev;
-
 				CH = &chip->P_CH[0];    /* channel 0 */
-				prev = CH->extended;
 				CH->extended = (v>>0) & 1;
-				if(prev != CH->extended)
-					update_channels(chip, CH);
-				CH++;                   /* channel 1 */
-				prev = CH->extended;
+				update_channels(chip, 0, CH);
+				CH = &chip->P_CH[1];    /* channel 1 */
 				CH->extended = (v>>1) & 1;
-				if(prev != CH->extended)
-					update_channels(chip, CH);
-				CH++;                   /* channel 2 */
-				prev = CH->extended;
+				update_channels(chip, 1, CH);
+				CH = &chip->P_CH[2];    /* channel 2 */
 				CH->extended = (v>>2) & 1;
-				if(prev != CH->extended)
-					update_channels(chip, CH);
-
+				update_channels(chip, 2, CH);
 
 				CH = &chip->P_CH[9];    /* channel 9 */
-				prev = CH->extended;
 				CH->extended = (v>>3) & 1;
-				if(prev != CH->extended)
-					update_channels(chip, CH);
-				CH++;                   /* channel 10 */
-				prev = CH->extended;
+				update_channels(chip, 3, CH);
+				CH = &chip->P_CH[10];   /* channel 10 */
 				CH->extended = (v>>4) & 1;
-				if(prev != CH->extended)
-					update_channels(chip, CH);
-				CH++;                   /* channel 11 */
-				prev = CH->extended;
+				update_channels(chip, 4, CH);
+				CH = &chip->P_CH[11];   /* channel 11 */
 				CH->extended = (v>>5) & 1;
-				if(prev != CH->extended)
-					update_channels(chip, CH);
-
+				update_channels(chip, 5, CH);
 			}
 			return;
 
@@ -1814,7 +1828,7 @@ static void OPL3WriteReg(OPL3 *chip, int r, int v)
 			if (v & 0x20)
 				chip->isDisabled = 0x00;
 
-			if (chip->OPL3_mode & 1)
+			// Note: 4-op mode is staying intact even when switching back to OPL2 mode. -Valley Bell
 			{
 				int chan_no = (r&0x0f) + ch_offset;
 
@@ -1901,19 +1915,6 @@ static void OPL3WriteReg(OPL3 *chip, int r, int v)
 				break;
 				}
 			}
-			else
-			{
-				if(v&0x20)
-				{
-					FM_KEYON (&CH->SLOT[SLOT1], 1);
-					FM_KEYON (&CH->SLOT[SLOT2], 1);
-				}
-				else
-				{
-					FM_KEYOFF(&CH->SLOT[SLOT1],~1);
-					FM_KEYOFF(&CH->SLOT[SLOT2],~1);
-				}
-			}
 		}
 		/* update */
 		if(CH->block_fnum != block_fnum)
@@ -1936,7 +1937,6 @@ static void OPL3WriteReg(OPL3 *chip, int r, int v)
 			else
 				CH->kcode |= (CH->block_fnum&0x200)>>9; /* notesel == 0 */
 
-			if (chip->OPL3_mode & 1)
 			{
 				int chan_no = (r&0x0f) + ch_offset;
 				/* in OPL3 mode */
@@ -2001,6 +2001,7 @@ static void OPL3WriteReg(OPL3 *chip, int r, int v)
 				break;
 
 				default:
+					/* 2op mode */
 					/* refresh Total Level in both SLOTs of this channel */
 					CH->SLOT[SLOT1].TLL = CH->SLOT[SLOT1].TL + (CH->ksl_base>>CH->SLOT[SLOT1].ksl);
 					CH->SLOT[SLOT2].TLL = CH->SLOT[SLOT2].TL + (CH->ksl_base>>CH->SLOT[SLOT2].ksl);
@@ -2010,18 +2011,6 @@ static void OPL3WriteReg(OPL3 *chip, int r, int v)
 					CALC_FCSLOT(CH,&CH->SLOT[SLOT2]);
 				break;
 				}
-			}
-			else
-			{
-				/* in OPL2 mode */
-
-				/* refresh Total Level in both SLOTs of this channel */
-				CH->SLOT[SLOT1].TLL = CH->SLOT[SLOT1].TL + (CH->ksl_base>>CH->SLOT[SLOT1].ksl);
-				CH->SLOT[SLOT2].TLL = CH->SLOT[SLOT2].TL + (CH->ksl_base>>CH->SLOT[SLOT2].ksl);
-
-				/* refresh frequency counter in both SLOTs of this channel */
-				CALC_FCSLOT(CH,&CH->SLOT[SLOT1]);
-				CALC_FCSLOT(CH,&CH->SLOT[SLOT2]);
 			}
 		}
 	break;
@@ -2058,7 +2047,6 @@ static void OPL3WriteReg(OPL3 *chip, int r, int v)
 		CH->SLOT[SLOT1].FB  = (v>>1)&7 ? ((v>>1)&7) + 7 : 0;
 		CH->SLOT[SLOT1].CON = v&1;
 
-		if( chip->OPL3_mode & 1 )
 		{
 			int chan_no = (r&0x0f) + ch_offset;
 
@@ -2174,12 +2162,6 @@ static void OPL3WriteReg(OPL3 *chip, int r, int v)
 					CH->SLOT[SLOT2].connect = &chanout[(r&0xf)+ch_offset];
 			break;
 			}
-		}
-		else
-		{
-			/* OPL2 mode - always 2 operators mode */
-			CH->SLOT[SLOT1].connect = CH->SLOT[SLOT1].CON ? &chanout[(r&0xf)+ch_offset] : &chip->phase_modulation;
-			CH->SLOT[SLOT2].connect = &chanout[(r&0xf)+ch_offset];
 		}
 	break;
 
