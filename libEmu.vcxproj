@@ -176,6 +176,7 @@
     <ClCompile Include="emu\cores\fmopl.c" />
     <ClCompile Include="emu\cores\fmopn.c" />
     <ClCompile Include="emu\cores\gb.c" />
+    <ClCompile Include="emu\cores\ics2115.c" />
     <ClCompile Include="emu\cores\iremga20.c" />
     <ClCompile Include="emu\cores\k005289.c" />
     <ClCompile Include="emu\cores\k007232.c" />
@@ -265,6 +266,7 @@
     <ClInclude Include="emu\cores\fmopl.h" />
     <ClInclude Include="emu\cores\fmopn.h" />
     <ClInclude Include="emu\cores\gb.h" />
+    <ClInclude Include="emu\cores\ics2115.h" />
     <ClInclude Include="emu\cores\iremga20.h" />
     <ClInclude Include="emu\cores\k005289.h" />
     <ClInclude Include="emu\cores\k007232.h" />
