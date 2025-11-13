@@ -511,7 +511,7 @@ static void update_noise(MSM5232_STATE* chip)
 		if (chip->noise_rng&1)
 			chip->noise_rng ^= 0x24000;
 		chip->noise_rng >>= 1;
-		if ((chip->noise_rng & (1<<16)) != tmp)
+		if ((int)(chip->noise_rng & (1<<16)) != tmp)
 			chip->noise_clocks++;
 		cnt--;
 	}

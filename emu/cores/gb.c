@@ -1032,7 +1032,7 @@ static void gb_update_noise_channel(gb_sound_t *gb, struct SOUND *snd, UINT32 cy
 {
 	UINT32 period = gb_noise_period_cycles(gb);
 	snd->cycles_left += cycles;
-	while (snd->cycles_left >= period)
+	while (snd->cycles_left >= (INT32)period)
 	{
 		UINT16 feedback;
 		snd->cycles_left -= period;

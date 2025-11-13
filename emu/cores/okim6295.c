@@ -588,8 +588,6 @@ static void okim6295_w(void* chip, UINT8 offset, UINT8 data)
 	case 0x0B:
 		info->clock_buffer[offset & 0x03] = data;
 		okim6295_set_clock(chip, 0);	// refresh clock from clock_buffer
-		if (info->SmpRateFunc != NULL)
-			info->SmpRateFunc(info->SmpRateData, okim6295_get_rate(chip));
 		break;
 	case 0x0C:
 		okim6295_set_pin7(info, data);

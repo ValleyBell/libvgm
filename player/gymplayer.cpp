@@ -93,7 +93,7 @@ const char* GYMPlayer::GetPlayerName(void) const
 	if (! memcmp(&DataLoader_GetData(dataLoader)[0x00], "GYMX", 4))
 		return 0x00;	// valid GYMX header
 	if (DataLoader_GetData(dataLoader)[0x00] <= 0x03)	// check for a valid command byte
-		return 0x00;
+		return 0x00;	// TODO: Check the first 0x40 bytes for a better heuristic
 	return 0xF0;	// invalid file
 }
 
