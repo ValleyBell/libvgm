@@ -25,7 +25,7 @@
 #include "../emu/cores/qsoundintf.h"
 #include "../emu/cores/scsp.h"
 #include "../emu/cores/msm5205.h"		// for MSM5205_CFG
-#include "../emu/cores/msm5232.h"		//for MSM5232_CFG
+#include "../emu/cores/msm5232.h"		// for MSM5232_CFG
 
 #include "dblk_compr.h"
 #include "../utils/StrUtils.h"
@@ -71,7 +71,7 @@
 	0x80, 0xE0, 0x100, 0xC0, 0x100, 0x40, 0x11E, 0x1C0,
 	0x100, 0xA0, 0x100, 0x100, 0x100, 0x100, 0x100, 0x100,
 	0x20, 0x100, 0x100, 0x100, 0x40, 0x20, 0x100, 0x40,
-	0x280, 0x100, 0x100, 0x100, 0x100, 0x1000, 
+	0x280, 0x100, 0x100, 0x100, 0x100, 0x100, 
 };
 /*static*/ const UINT16 VGMPlayer::_PB_VOL_AMNT[_CHIP_COUNT] =
 {	0x100, 0x80, 0x100, 0x100, 0x100, 0x100, 0x100, 0x100,
@@ -79,7 +79,7 @@
 	0x200, 0x100, 0x200, 0x400, 0x200, 0x400, 0x100, 0x200,
 	0x200, 0x100, 0x100, 0x100, 0x180, 0x100, 0x100, 0x100,
 	0x800, 0x100, 0x100, 0x100, 0x800, 0x1000, 0x100, 0x800,
-	0x100, 0x200, 0x100, 0x100, 0x200, 0x10, 
+	0x100, 0x200, 0x100, 0x100, 0x200, 0x100, 
 };
 
 /*static*/ const char* const VGMPlayer::_TAG_TYPE_LIST[_TAG_COUNT] =
@@ -114,18 +114,6 @@ INLINE UINT32 ReadLE32(const UINT8* data)
 	return	*(UINT32*)data;
 #else
 	return	(data[0x03] << 24) | (data[0x02] << 16) |
-			(data[0x01] <<  8) | (data[0x00] <<  0);
-#endif
-}
-
-INLINE double ReadLE64d(const UINT8* data)
-{
-#ifdef VGM_LITTLE_ENDIAN
-	return	*(UINT64*)data;
-#else
-	return	(data[0x07] << 56) | (data[0x06] << 48) |
-			(data[0x05] << 40) | (data[0x04] << 32) |
-			(data[0x03] << 24) | (data[0x02] << 16) |
 			(data[0x01] <<  8) | (data[0x00] <<  0);
 #endif
 }
@@ -1334,7 +1322,7 @@ void VGMPlayer::GenerateDeviceConfig(void)
 					devCfg.clock *= 512;	// (for backwards compatibility with old VGM logs from 2012-14)
 				SaveDeviceConfig(sdCfg.cfgData, &devCfg, sizeof(DEV_GEN_CFG));
 				break;
-            		case DEVID_MSM5232:
+			case DEVID_MSM5232:
 			{
 				MSM5232_CFG okiCfg;
 
