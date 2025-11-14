@@ -118,7 +118,7 @@ static DEV_DEF devDef =
 
 static const char* DeviceName(const DEV_GEN_CFG* devCfg)
 {
-	return "OKIM6295";
+	return "MSM6295";
 }
 
 static UINT16 DeviceChannels(const DEV_GEN_CFG* devCfg)
@@ -131,9 +131,9 @@ static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
 	return NULL;
 }
 
-const DEV_DECL sndDev_OKIM6295 =
+const DEV_DECL sndDev_MSM6295 =
 {
-	DEVID_OKIM6295,
+	DEVID_MSM6295,
 	DeviceName,
 	DeviceChannels,
 	DeviceChannelNames,

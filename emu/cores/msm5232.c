@@ -281,7 +281,7 @@ static UINT8 device_start_msm5232(const MSM5232_CFG* cfg, DEV_INFO* retDevInf)
     chip->EN_out16[0] = chip->EN_out8[0] = chip->EN_out4[0] = chip->EN_out2[0] = 0;
     chip->EN_out16[1] = chip->EN_out8[1] = chip->EN_out4[1] = chip->EN_out2[1] = 0;
 
-    // --- TA7630 external volume defaults: max (0) ---
+    // --- TA7630 external volume defaults: max (0x0F) ---
     chip->ext_vol[0] = 0x0F;
     chip->ext_vol[1] = 0x0F;
     chip->ext_vol_gain[0] = chip->vol_ctrl[chip->ext_vol[0]];
@@ -290,6 +290,7 @@ static UINT8 device_start_msm5232(const MSM5232_CFG* cfg, DEV_INFO* retDevInf)
 	// initialize per-output volume (0x80 = 100%)
 	for (i = 0; i < MSM5232_NUM_OUTPUTS; i++)
 	{
+		// enable 0..7 by default, mute 8..10 (not connected in Taito machines)
 		chip->per_out_vol[i] = (i >= 8) ? 0 : 0x80;
 	}
 
