@@ -46,5 +46,5 @@
 #define DEVID_K007232	0x2A
 #define DEVID_K005289	0x2B
 #define DEVID_MSM5205	0x2C	// variants: MSM5205, MSM6585
-#define DEVID_MSM5232  0x2D
+#define DEVID_MSM5232	0x2D
 #endif	// __SOUNDDEVS_H__

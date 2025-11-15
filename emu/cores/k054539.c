@@ -161,8 +161,7 @@ struct _k054539_state {
 	UINT16 reverb_pos;
 
 	UINT32 cur_ptr;
-	UINT32 cur_limit;
-	UINT8 *cur_zone;
+	UINT32 rom_addr;
 	UINT8 *rom;
 	UINT32 rom_size;
 	UINT32 rom_mask;
@@ -438,9 +437,9 @@ static void k054539_w(void *chip, UINT16 offset, UINT8 data)
 
 		/* The K054539 has behavior like many other wavetable chips including
 		   the Ensoniq 550x and Gravis GF-1: if a voice is active, writing
-		   to it's current position is silently ignored.
+		   to its current position is silently ignored.
 
-		   Dadandaan depends on this or the vocals go wrong.
+		   Dadandarn depends on this or the vocals go wrong.
 		*/
 		if (offset < 8*0x20)
 		{
@@ -522,18 +521,15 @@ static void k054539_w(void *chip, UINT16 offset, UINT8 data)
 		break;
 
 		case 0x22d:
-			if(info->regs[0x22e] == 0x80)
-				info->cur_zone[info->cur_ptr] = data;
-			info->cur_ptr++;
-			if(info->cur_ptr == info->cur_limit)
-				info->cur_ptr = 0;
+			if(info->rom_addr == 0x80) {
+				UINT32 addr = (info->cur_ptr & 0x3fff) | ((info->cur_ptr & 0x10000) >> 2);
+				info->ram[addr] = data;
+			}
+			info->cur_ptr = (info->cur_ptr + 1) & 0x1ffff;
 		break;
 
 		case 0x22e:
-			info->cur_zone =
-				data == 0x80 ? info->ram :
-				&info->rom[0x20000*data];
-			info->cur_limit = data == 0x80 ? 0x4000 : 0x20000;
+			info->rom_addr = data;
 			info->cur_ptr = 0;
 		break;
 
@@ -566,23 +562,15 @@ static void k054539_w(void *chip, UINT16 offset, UINT8 data)
 	info->regs[offset] = data;
 }
 
-static void reset_zones(k054539_state *info)
-{
-	int data = info->regs[0x22e];
-	info->cur_zone = data == 0x80 ? info->ram : &info->rom[0x20000*data];
-	info->cur_limit = data == 0x80 ? 0x4000 : 0x20000;
-}
-
 static UINT8 k054539_r(void *chip, UINT16 offset)
 {
 	k054539_state *info = (k054539_state *)chip;
 	switch(offset) {
 	case 0x22d:
 		if(info->regs[0x22f] & 0x10) {
-			UINT8 res = info->cur_zone[info->cur_ptr];
-			info->cur_ptr++;
-			if(info->cur_ptr == info->cur_limit)
-				info->cur_ptr = 0;
+			UINT32 addr = (info->cur_ptr & 0x3fff) | ((info->cur_ptr & 0x10000) >> 2);
+			UINT8 res = (info->rom_addr == 0x80) ? info->ram[addr] : info->rom[((0x20000*info->rom_addr) + info->cur_ptr) & info->rom_mask];
+			info->cur_ptr = (info->cur_ptr + 1) & 0x1ffff;
 			return res;
 		} else
 			return 0;
@@ -623,7 +611,7 @@ static UINT8 device_start_k054539(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 	    values smaller than those of the hihats. Needless to say the two K054539 chips
 	    in Mystic Warriors are completely out of balance. Rather than forcing a
 	    "one size fits all" function to the voltab the current invert exponential
-	    appraoch seems most appropriate.
+	    approach seems most appropriate.
 	*/
 	// Factor the 1/4 for the number of channels in the volume (1/8 is too harsh, 1/2 gives clipping)
 	// vol=0 -> no attenuation, vol=0x40 -> -36dB
@@ -641,7 +629,7 @@ static UINT8 device_start_k054539(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 
 	info->flags |= K054539_UPDATE_AT_KEYON; //* make it default until proven otherwise
 
-	info->ram = (UINT8*)malloc(0x4000);
+	info->ram = (UINT8*)malloc(0x8000);
 	info->rom = NULL;
 	info->rom_size = 0x00;
 	info->rom_mask = 0x00;
@@ -676,7 +664,8 @@ static void device_reset_k054539(void *chip)
 	
 	info->reverb_pos = 0;
 	info->cur_ptr = 0;
-	memset(info->ram, 0x00, 0x4000);
+	info->rom_addr = 0;
+	memset(info->ram, 0x00, 0x8000);
 	
 	return;
 }

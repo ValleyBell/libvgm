@@ -1041,21 +1041,22 @@ void ay8910_write_reg(ay8910_context *psg, UINT8 r, UINT8 v)
 			/* No action required */
 			break;
 		case AY_ENABLE:
-			if (psg->last_enable == 0xFF)
-				psg->last_enable = ~psg->regs[AY_ENABLE];
-
-			if ((psg->last_enable & 0x40) != (psg->regs[AY_ENABLE] & 0x40))
 			{
-				/* write out 0xff if port set to input */
-				//if (psg->port_a_write_cb != NULL)
-				//	psg->port_a_write_cb(psg, 0, (psg->regs[AY_ENABLE] & 0x40) ? psg->regs[AY_PORTA] : 0xff);
-			}
+				UINT8 enable = psg->regs[AY_ENABLE] & 0x40;
+				if (enable != (psg->last_enable & 0x40))
+				{
+					// output is high-impedance if port is set to input
+					//if (psg->port_a_write_cb != NULL)
+					//	psg->port_a_write_cb(psg, 0, enable ? psg->regs[AY_PORTA] : 0xff);
+				}
 
-			if ((psg->last_enable & 0x80) != (psg->regs[AY_ENABLE] & 0x80))
-			{
-				/* write out 0xff if port set to input */
-				//if (psg->port_b_write_cb != NULL)
-				//	psg->port_b_write_cb(psg, 0, (psg->regs[AY_ENABLE] & 0x80) ? psg->regs[AY_PORTB] : 0xff);
+				enable = psg->regs[AY_ENABLE] & 0x80;
+				if (enable != (psg->last_enable & 0x80))
+				{
+					// output is high-impedance if port is set to input
+					//if (psg->port_b_write_cb != NULL)
+					//	psg->port_b_write_cb(psg, 0, enable ? psg->regs[AY_PORTB] : 0xff);
+				}
 			}
 
 			psg->last_enable = psg->regs[AY_ENABLE] & 0xC0;
@@ -1441,7 +1442,7 @@ void ay8910_reset(void *chip)
 	psg->count_noise = 0;
 	psg->count_env = 0;
 	psg->prescale_noise = 0;
-	psg->last_enable = 0xFF;    /* force a write */
+	psg->last_enable = 0xC0;    /* force a write */
 	for (i = 0;i < AY_PORTA;i++)
 		ay8910_write_reg(psg,i,0);
 	//psg->ready = 1;
@@ -1527,7 +1528,7 @@ UINT8 ay8910_read(void *chip, UINT8 addr)
 	switch (r)
 	{
 	case AY_PORTA:
-		if ((psg->regs[AY_ENABLE] & 0x40) != 0)
+		if (psg->regs[AY_ENABLE] & 0x40)
 			emu_logf(&psg->logger, DEVLOG_WARN, "read from Port A set as output\n");
 		/*
 		   even if the port is set as output, we still need to return the external
@@ -1545,7 +1546,7 @@ UINT8 ay8910_read(void *chip, UINT8 addr)
 		//	emu_logf(&psg->logger, DEVLOG_WARN, "read Port A\n");
 		break;
 	case AY_PORTB:
-		if ((psg->regs[AY_ENABLE] & 0x80) != 0)
+		if (psg->regs[AY_ENABLE] & 0x80)
 			emu_logf(&psg->logger, DEVLOG_WARN, "read from Port B set as output\n");
 		//if (psg->port_b_read_cb != NULL)
 		//	psg->regs[AY_PORTB] = psg->port_b_read_cb(psg, 0);

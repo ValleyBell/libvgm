@@ -821,6 +821,8 @@ void VGMPlayer::Cmd_PcmRamWrite(void)
 	const UINT8* ROMData = &_pcmBank[dbType].data[dbPos];
 	if (! dataLen)
 		dataLen += 0x01000000;
+	if (_pcmBank[dbType].data.size() - dbPos > dataLen)
+		return;	// just outright ignore writes that would go out-of-bounds
 	
 	if (chipType == 0x14)	// NES APU
 	{

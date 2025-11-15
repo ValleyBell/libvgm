@@ -78,7 +78,7 @@
  *  - optional non-indexing pokey update functions.
  *
  *  TODO:  liberatr clipping
- *  TODO:  bit-level serial I/O instead of fake byte read/write handlers
+ *  TODO:  external clock modes for serial I/O
  *
  *
  *****************************************************************************/
@@ -310,6 +310,13 @@ struct pokey_device
 	UINT8 m_kbd_latch;
 	UINT8 m_kbd_state;
 
+	UINT16 m_serin_shift;
+	UINT16 m_serout_shift;
+	UINT8 m_ser_iclk;
+	UINT8 m_ser_oclk;
+	UINT8 m_serout_full;
+	UINT8 m_sod_twotone;
+
 	double m_clock_period;
 
 	UINT32 m_poly4[0x0f];
@@ -444,14 +451,16 @@ static void set_output_discrete(pokey_device *d)
 #define SK_FRAME    0x80    /* serial framing error */
 #define SK_KBERR    0x40    /* keyboard overrun error - pokey documentation states *some bit as IRQST */
 #define SK_OVERRUN  0x20    /* serial overrun error - pokey documentation states *some bit as IRQST */
-#define SK_SERIN    0x10    /* serial input high */
+#define SK_SERIN    0x10    /* serial data input low */
 #define SK_SHIFT    0x08    /* shift key pressed */
 #define SK_KEYBD    0x04    /* keyboard key pressed */
-#define SK_SEROUT   0x02    /* serial output active */
+#define SK_BUSY     0x02    /* serial input shift register busy */
 
 /* SKCTL (W/D20F) */
 #define SK_BREAK    0x80    /* serial out break signal */
-#define SK_BPS      0x70    /* bits per second */
+#define SK_OCLK     0x60    /* serial out clock mode */
+#define SK_ICLK     0x30    /* serial in clock mode */
+#define SK_ASYNC    0x10    /* asynchronous receive mode */
 #define SK_TWOTONE  0x08    /* Two tone mode */
 #define SK_PADDLE   0x04    /* fast paddle a/d conversion */
 #define SK_RESET    0x03    /* reset serial/keyboard interface */
@@ -581,6 +590,13 @@ static void device_reset_pokey(void *info)
 	d->m_out_raw = 0;
 	d->m_old_raw_inval = 1;
 	d->m_kbd_state = 0;
+
+	d->m_serin_shift = 1;
+	d->m_serout_shift = 1;
+	d->m_serout_full = false;
+	d->m_ser_iclk = true;
+	d->m_ser_oclk = false;
+	d->m_sod_twotone = false;
 
 	d->m_icount = 0;
 
@@ -736,11 +752,15 @@ static void pokey_step_pot(pokey_device *d)
 
 static void pokey_step_one_clock(pokey_device *d)
 {
+	UINT8 toggle_iclk = 0;
+	UINT8 toggle_oclk = 0;
+
 	if (d->m_SKCTL & SK_RESET)
 	{
 		/* Clocks only count if we are not in a reset */
 		int clock_triggered[3] = {1,0,0};
 		int base_clock;
+		UINT8 async_reset;
 
 		/* polynom pointers */
 		if (++d->m_p4 == 0x0000f)
@@ -780,7 +800,11 @@ static void pokey_step_one_clock(pokey_device *d)
 		if ((!(d->m_AUDCTL & CH1_HICLK)) && (clock_triggered[base_clock]))
 			pokey_channel_inc_chan(&d->m_channel[CHAN1], d, 1);
 
-		if ((d->m_AUDCTL & CH3_HICLK) && (clock_triggered[CLK_1]))
+		async_reset = (d->m_SKCTL & SK_ASYNC) && !(d->m_SKSTAT & (SK_BUSY | SK_SERIN));
+		if (async_reset)
+			d->m_ser_iclk = true; // kludge needed for mid-bit sampling
+
+		if ((d->m_AUDCTL & CH3_HICLK) && (clock_triggered[CLK_1]) && !async_reset)
 		{
 			if (d->m_AUDCTL & CH34_JOINED)
 				pokey_channel_inc_chan(&d->m_channel[CHAN3], d, 7);
@@ -788,15 +812,28 @@ static void pokey_step_one_clock(pokey_device *d)
 				pokey_channel_inc_chan(&d->m_channel[CHAN3], d, 4);
 		}
 
-		if ((!(d->m_AUDCTL & CH3_HICLK)) && (clock_triggered[base_clock]))
+		if ((!(d->m_AUDCTL & CH3_HICLK)) && (clock_triggered[base_clock]) && !async_reset)
 			pokey_channel_inc_chan(&d->m_channel[CHAN3], d, 1);
 
 		if (clock_triggered[base_clock])
 		{
 			if (!(d->m_AUDCTL & CH12_JOINED))
+			{
+				if (d->m_channel[CHAN2].m_counter == 0xff && (d->m_SKCTL & SK_OCLK) == 0x60)
+					toggle_oclk = true;
 				pokey_channel_inc_chan(&d->m_channel[CHAN2], d, 1);
-			if (!(d->m_AUDCTL & CH34_JOINED))
+			}
+			if (!(d->m_AUDCTL & CH34_JOINED) && !async_reset)
+			{
+				if (d->m_channel[CHAN4].m_counter == 0xff)
+				{
+					if ((d->m_SKCTL & SK_ICLK) != 0)
+						toggle_iclk = true;
+					if ((d->m_SKCTL & SK_OCLK) && (d->m_SKCTL & SK_OCLK) != 0x60)
+						toggle_oclk = true;
+				}
 				pokey_channel_inc_chan(&d->m_channel[CHAN4], d, 1);
+			}
 		}
 
 		/* Potentiometer handling */
@@ -811,7 +848,16 @@ static void pokey_step_one_clock(pokey_device *d)
 	if (pokey_channel_check_borrow(&d->m_channel[CHAN3]))
 	{
 		if (d->m_AUDCTL & CH34_JOINED)
+		{
+			if (d->m_channel[CHAN4].m_counter == 0xff)
+			{
+				if ((d->m_SKCTL & SK_ICLK) != 0)
+					toggle_iclk = true;
+				if ((d->m_SKCTL & SK_OCLK) != 0 && (d->m_SKCTL & SK_OCLK) != 0x60)
+					toggle_oclk = true;
+			}
 			pokey_channel_inc_chan(&d->m_channel[CHAN4], d, 1);
+		}
 		else
 			pokey_channel_reset_channel(&d->m_channel[CHAN3]);
 
@@ -844,16 +890,33 @@ static void pokey_step_one_clock(pokey_device *d)
 	{
 		pokey_channel_reset_channel(&d->m_channel[CHAN1]);
 		d->m_old_raw_inval = true;
+
+		d->m_sod_twotone = !d->m_sod_twotone;
+		//d->m_sod_w_cb(!d->m_sod_twotone);
 	}
 
 	if (pokey_channel_check_borrow(&d->m_channel[CHAN1]))
 	{
 		if (d->m_AUDCTL & CH12_JOINED)
+		{
+			if (d->m_channel[CHAN2].m_counter == 0xff && (d->m_SKCTL & SK_OCLK) == 0x60)
+				toggle_oclk = true;
 			pokey_channel_inc_chan(&d->m_channel[CHAN2], d, 1);
+		}
 		else
+		{
 			pokey_channel_reset_channel(&d->m_channel[CHAN1]);
 
-		// TODO: If two-tone is enabled *and* serial output == 1 then reset the channel 2 timer.
+			// If two-tone is enabled *and* serial output == 1 then reset the channel 2 timer.
+			if ((d->m_SKCTL & SK_TWOTONE) && ((d->m_IRQST & IRQ_SEROC) ? !(d->m_SKCTL & SK_BREAK) : d->m_serout_shift & 1))
+			{
+				pokey_channel_reset_channel(&d->m_channel[CHAN2]);
+				d->m_old_raw_inval = true;
+
+				d->m_sod_twotone = !d->m_sod_twotone;
+				//d->m_sod_w_cb(!d->m_sod_twotone);
+			}
+		}
 
 		pokey_process_channel(d,CHAN1);
 	}
@@ -885,6 +948,22 @@ static void pokey_step_one_clock(pokey_device *d)
 
 		d->m_old_raw_inval = 0;
 		d->m_out_raw = sum;
+	}
+
+	if (toggle_iclk)
+	{
+		d->m_ser_iclk = !d->m_ser_iclk;
+		//if (!d->m_ser_iclk)
+		//	process_serin();
+	}
+
+	if (toggle_oclk && (d->m_serout_full || !(d->m_IRQST & IRQ_SEROC)))
+	{
+		d->m_ser_oclk = !d->m_ser_oclk;
+		//if (d->m_ser_oclk)
+		//	process_serout();
+		//else
+		//	m_oclk_w_cb(0);
 	}
 }
 
@@ -1040,8 +1119,6 @@ UINT8 pokey_read(pokey_device *d, UINT8 offset)
 		break;
 
 	case SERIN_C:
-		//if (!d->m_serin_r_cb.isnull())
-		//	d->m_SERIN = d->m_serin_r_cb(offset);
 		data = d->m_SERIN;
 		//LOG("%s: POKEY SERIN  $%02x\n", machine().describe_context(), data);
 		break;
@@ -1163,21 +1240,8 @@ void pokey_write(pokey_device *d, UINT8 offset, UINT8 data)
 
 	case SEROUT_C:
 		//LOG("%s: POKEY SEROUT $%02x\n", machine().describe_context(), data);
-		// TODO: convert to real serial comms, fix timings
-		// SEROC (1) serial out in progress (0) serial out complete
-		// in progress status is necessary for a800 telelnk2 to boot
-		d->m_IRQST &= ~IRQ_SEROC;
-
-		//d->m_serout_w_cb(offset, data);
-		d->m_SKSTAT |= SK_SEROUT;
-		/*
-		 * These are arbitrary values, tested with some custom boot
-		 * loaders from Ballblazer and Escape from Fractalus
-		 * The real times are unknown
-		 */
-		//d->m_serout_ready_timer->adjust(attotime::from_usec(200));
-		/* 10 bits (assumption 1 start, 8 data and 1 stop bit) take how long? */
-		//d->m_serout_complete_timer->adjust(attotime::from_usec(2000));
+		d->m_SEROUT = data;
+		d->m_serout_full = true;
 		break;
 
 	case IRQEN_C:
@@ -1205,7 +1269,7 @@ void pokey_write(pokey_device *d, UINT8 offset, UINT8 data)
 		break;
 
 	case SKCTL_C:
-		if( data == d->m_SKCTL )
+		if (data == d->m_SKCTL)
 			return;
 		//LOG("%s: POKEY SKCTL  $%02x\n", machine().describe_context(), data);
 		d->m_SKCTL = data;
@@ -1227,8 +1291,14 @@ void pokey_write(pokey_device *d, UINT8 offset, UINT8 data)
 			d->m_clock_cnt[0] = 0;
 			d->m_clock_cnt[1] = 0;
 			d->m_clock_cnt[2] = 0;
-			d->m_old_raw_inval = 1;
-			/* FIXME: Serial port reset ! */
+
+			// Reset serial port
+			d->m_serin_shift = 1;
+			d->m_serout_shift = 1;
+			d->m_serout_full = false;
+			//d->m_oclk_w_cb(0);
+			d->m_SKSTAT &= ~SK_BUSY;
+			//d->m_serout_complete_timer->adjust(attotime::zero);
 		}
 		if (!(data & SK_KEYSCAN))
 		{
@@ -1236,6 +1306,17 @@ void pokey_write(pokey_device *d, UINT8 offset, UINT8 data)
 			d->m_kbd_cnt = 0;
 			d->m_kbd_state = 0;
 		}
+		if ((data & SK_ICLK) == 0)
+			d->m_ser_iclk = true;
+		if ((data & SK_OCLK) == 0)
+			d->m_ser_oclk = false;
+		if ((data & SK_ASYNC) && !(d->m_SKSTAT & SK_BUSY))
+		{
+			pokey_channel_reset_channel(&d->m_channel[CHAN3]);
+			pokey_channel_reset_channel(&d->m_channel[CHAN4]);
+		}
+		//if (!(d->m_SKSTAT & SK_BUSY) && !(data & SK_TWOTONE))
+		//	d->m_sod_w_cb((data & SK_BREAK) ? 0 : 1);
 		d->m_old_raw_inval = 1;
 		break;
 	}
@@ -1252,13 +1333,14 @@ void pokey_write(pokey_device *d, UINT8 offset, UINT8 data)
 
 static void pokey_sid_w(pokey_device *d, UINT8 state)
 {
+	// Note: all bits in SKSTAT are negated
 	if (state)
 	{
-		d->m_SKSTAT |= SK_SERIN;
+		d->m_SKSTAT &= ~SK_SERIN;
 	}
 	else
 	{
-		d->m_SKSTAT &= ~SK_SERIN;
+		d->m_SKSTAT |= SK_SERIN;
 	}
 }
 

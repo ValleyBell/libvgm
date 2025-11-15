@@ -870,16 +870,17 @@ static void MultiPCM_update(void *info, UINT32 samples, DEV_SMPL **outputs)
 				}
 
 				slot->offset += step;
+
+				if (spos ^ (slot->offset >> TL_SHIFT))
+				{
+					slot->prev_sample = csample;
+				}
+
 				if (slot->offset >= (slot->sample.end << TL_SHIFT))
 				{
 					slot->offset -= (slot->sample.end - slot->sample.loop) << TL_SHIFT;
 					// DD-9 expects the looped silence at the end of some samples to be the same whether reversed or not
 					slot->reverse = false;
-				}
-
-				if (spos ^ (slot->offset >> TL_SHIFT))
-				{
-					slot->prev_sample = csample;
 				}
 
 				if ((slot->total_level >> TL_SHIFT) != slot->dest_total_level)
