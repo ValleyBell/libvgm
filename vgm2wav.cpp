@@ -11,6 +11,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <io.h>
+#include <fcntl.h>
+#endif
 
 #include "player/playerbase.hpp"
 #include "player/vgmplayer.hpp"
@@ -35,8 +39,8 @@
 #define BUFFER_LEN 2048
 
 /* fade length, in seconds */
-static unsigned int
-fade_len = 8;
+static double
+fade_len = 8.0;
 
 static unsigned int
 sample_rate = 44100;
@@ -166,7 +170,7 @@ int main(int argc, const char *argv[]) {
                 argc--;
                 s = *argv;
             }
-            fade_len = scan_uint(s);
+            fade_len = strtod(s, NULL);
             argv++;
             argc--;
         }
@@ -193,10 +197,11 @@ int main(int argc, const char *argv[]) {
     if(argc < 2) {
         fprintf(stderr,"Usage: %s [options] /path/to/vgm-file /path/to/out.wav\n",self);
         fprintf(stderr,"Available options:\n");
-        fprintf(stderr,"    --samplerate\n");
-        fprintf(stderr,"    --bps\n");
-        fprintf(stderr,"    --fade\n");
-        fprintf(stderr,"    --loops\n");
+        fprintf(stderr,"    --samplerate n - sample rate (default: %d)\n", 44100);
+        fprintf(stderr,"    --bps n        - bits per sample (default: %d)\n", 16);
+        fprintf(stderr,"    --fade x       - fade out length in seconds (default: %.1f)\n", 8.0);
+        fprintf(stderr,"    --loops n      - numbers of loops before fade out (default: %d)\n", 2);
+        fprintf(stderr,"Specify \"-\" as output file to write to stdout.\n");
         return 1;
     }
 
@@ -236,13 +241,21 @@ int main(int argc, const char *argv[]) {
         PlayerA::Config pCfg = player.GetConfiguration();
         pCfg.masterVol = 0x10000;	// == 1.0 == 100%
         pCfg.loopCount = loops;
-        pCfg.fadeSmpls = sample_rate * fade_len;
+        pCfg.fadeSmpls = (UINT32)(sample_rate * fade_len);
         pCfg.endSilenceSmpls = 0;
         pCfg.pbSpeed = 1.0;
         player.SetConfiguration(pCfg);
     }
 
-    f = fopen(argv[1],"wb");
+    if (!strcmp(argv[1], "-")) {
+        f = stdout;
+#ifdef _WIN32
+        _setmode(_fileno(f), _O_BINARY);	// force binary output mode
+#endif
+    }
+    else {
+        f = fopen(argv[1],"wb");
+    }
     if(f == NULL) {
         fprintf(stderr,"unable to open output file\n");
         return 1;
@@ -316,9 +329,8 @@ int main(int argc, const char *argv[]) {
 
     /* we only want to fade if there's a looping section. Assumption is
      * if the VGM doesn't specify a loop, it's a song with an actual ending */
-    if(plrEngine->GetLoopTicks()) {
-        fadeFrames = sample_rate * fade_len;
-        totalFrames += fadeFrames;
+    if(plrEngine->GetLoopTicks() > 0) {
+        totalFrames += player.GetFadeSamples();
     }
 
     /* Let's tell the user what we're doing */
