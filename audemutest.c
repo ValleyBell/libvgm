@@ -131,7 +131,7 @@ int main(int argc, char* argv[])
 	devCfg.srMode = DEVRI_SRMODE_NATIVE;
 	devCfg.flags = 0x00;
 	devCfg.clock = 0x101D00;
-	retVal = SndEmu_Start(DEVID_OKIM6295, &devCfg, &okiDefInf);
+	retVal = SndEmu_Start(DEVID_MSM6295, &devCfg, &okiDefInf);
 	{
 		FILE* hFile = fopen("122a05.bin", "rb");	// load Hexion sample ROM
 		if (hFile != NULL)

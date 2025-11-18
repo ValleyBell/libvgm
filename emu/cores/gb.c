@@ -189,12 +189,12 @@ const DEV_DECL sndDev_GB_DMG =
 #define FRAME_CYCLES 8192
 
 /* Represents wave duties of 12.5%, 25%, 50% and 75% */
-static const int wave_duty_table[4][8] =
+static const int wave_duty_table[4] =
 {
-	{ -1, -1, -1, -1, -1, -1, -1,  1},
-	{  1, -1, -1, -1, -1, -1, -1,  1},
-	{  1, -1, -1, -1, -1,  1,  1,  1},
-	{ -1,  1,  1,  1,  1,  1,  1, -1}
+	0x80,	// 0b10000000,
+	0x81,	// 0b10000001,
+	0xE1,	// 0b11100001,
+	0x7E,	// 0b01111110
 };
 
 
@@ -212,32 +212,33 @@ struct SOUND
 	UINT8  length_mask;
 	bool   length_counting;
 	bool   length_enabled;
-	/* Mode 1, 2, 3 */
+	UINT16 frequency;
+	UINT16 frequency_counter;
+	/* Channel 1, 2, 3 */
 	INT32  cycles_left;
 	INT8   duty;
-	/* Mode 1, 2, 4 */
+	/* Channel 1, 2, 4 */
 	bool   envelope_enabled;
 	INT8   envelope_value;
 	INT8   envelope_direction;
 	UINT8  envelope_time;
 	UINT8  envelope_count;
 	INT8   signal;
-	/* Mode 1 */
-	UINT16 frequency;
-	UINT16 frequency_counter;
+	/* Channel 1 */
+	UINT16 frequency_shadow;
 	bool   sweep_enabled;
 	bool   sweep_neg_mode_used;
 	UINT8  sweep_shift;
 	INT32  sweep_direction;
 	UINT8  sweep_time;
 	UINT8  sweep_count;
-	/* Mode 3 */
+	/* Channel 3 */
 	UINT8  level;
 	UINT8  offset;
 	UINT32 duty_count;
 	INT8   current_sample;
 	bool   sample_reading;
-	/* Mode 4 */
+	/* Channel 4 */
 	bool   noise_short;
 	UINT16 noise_lfsr;
 	UINT8  Muted;
@@ -248,14 +249,8 @@ struct SOUNDC
 	UINT8 on;
 	UINT8 vol_left;
 	UINT8 vol_right;
-	UINT8 mode1_left;
-	UINT8 mode1_right;
-	UINT8 mode2_left;
-	UINT8 mode2_right;
-	UINT8 mode3_left;
-	UINT8 mode3_right;
-	UINT8 mode4_left;
-	UINT8 mode4_right;
+	bool chan_left[4];
+	bool chan_right[4];
 	UINT32 cycles;
 	bool wave_ram_locked;
 };
@@ -270,10 +265,7 @@ struct _gb_sound_t
 
 	UINT32 rate;
 
-	struct SOUND  snd_1;
-	struct SOUND  snd_2;
-	struct SOUND  snd_3;
-	struct SOUND  snd_4;
+	struct SOUND  snd[4];
 	struct SOUNDC snd_control;
 
 	UINT8 snd_regs[0x30];
@@ -304,12 +296,12 @@ static UINT8 gb_wave_r(void *chip, UINT8 offset)
 
 	//gb_update_state(gb, 0);
 
-	if (gb->snd_3.on)
+	if (gb->snd[2].on)
 	{
 		if (gb->gbMode == GBMODE_DMG)
-			return gb->snd_3.sample_reading ? gb->snd_regs[AUD3W0 + (gb->snd_3.offset/2)] : 0xFF;
+			return gb->snd[2].sample_reading ? gb->snd_regs[AUD3W0 + (gb->snd[2].offset/2)] : 0xFF;
 		else if (gb->gbMode == GBMODE_CGB04)
-			return gb->snd_regs[AUD3W0 + (gb->snd_3.offset/2)];
+			return gb->snd_regs[AUD3W0 + (gb->snd[2].offset/2)];
 	}
 
 	return gb->snd_regs[AUD3W0 + offset];
@@ -321,18 +313,18 @@ static void gb_wave_w(void *chip, UINT8 offset, UINT8 data)
 
 	//gb_update_state(gb, 0);
 
-	if (gb->snd_3.on)
+	if (gb->snd[2].on)
 	{
 		if (gb->gbMode == GBMODE_DMG)
 		{
-			if (gb->snd_3.sample_reading)
+			if (gb->snd[2].sample_reading)
 			{
-				gb->snd_regs[AUD3W0 + (gb->snd_3.offset/2)] = data;
+				gb->snd_regs[AUD3W0 + (gb->snd[2].offset/2)] = data;
 			}
 		}
 		else if (gb->gbMode == GBMODE_CGB04)
 		{
-			gb->snd_regs[AUD3W0 + (gb->snd_3.offset/2)] = data;
+			gb->snd_regs[AUD3W0 + (gb->snd[2].offset/2)] = data;
 		}
 	}
 	else
@@ -360,7 +352,7 @@ static UINT8 gb_sound_r(void *chip, UINT8 offset)
 		{
 			if (offset == NR52)
 			{
-				return (gb->snd_regs[NR52]&0xf0) | (gb->snd_1.on ? 1 : 0) | (gb->snd_2.on ? 2 : 0) | (gb->snd_3.on ? 4 : 0) | (gb->snd_4.on ? 8 : 0) | 0x70;
+				return (gb->snd_regs[NR52]&0xf0) | (gb->snd[0].on ? 1 : 0) | (gb->snd[1].on ? 2 : 0) | (gb->snd[2].on ? 4 : 0) | (gb->snd[3].on ? 8 : 0) | 0x70;
 			}
 			return gb->snd_regs[offset] | read_mask[offset & 0x3F];
 		}
@@ -390,96 +382,97 @@ static void gb_sound_w_internal(gb_sound_t *gb, UINT8 offset, UINT8 data)
 	{
 	/*MODE 1 */
 	case NR10: /* Sweep (R/W) */
-		gb->snd_1.reg[0] = data;
-		gb->snd_1.sweep_shift = data & 0x7;
-		gb->snd_1.sweep_direction = (data & 0x8) ? -1 : 1;
-		gb->snd_1.sweep_time = (data & 0x70) >> 4;
-		if ((old_data & 0x08) && !(data & 0x08) && gb->snd_1.sweep_neg_mode_used)
+		gb->snd[0].reg[0] = data;
+		gb->snd[0].sweep_shift = data & 0x7;
+		gb->snd[0].sweep_direction = (data & 0x8) ? -1 : 1;
+		gb->snd[0].sweep_time = (data & 0x70) >> 4;
+		if ((old_data & 0x08) && !(data & 0x08) && gb->snd[0].sweep_neg_mode_used)
 		{
-			gb->snd_1.on = false;
+			gb->snd[0].on = false;
 		}
 		break;
 	case NR11: /* Sound length/Wave pattern duty (R/W) */
-		gb->snd_1.reg[1] = data;
+		gb->snd[0].reg[1] = data;
 		if (gb->snd_control.on)
 		{
-			gb->snd_1.duty = (data & 0xc0) >> 6;
+			gb->snd[0].duty = (data & 0xc0) >> 6;
 		}
-		gb->snd_1.length = data & 0x3f;
-		gb->snd_1.length_counting = true;
+		gb->snd[0].length = data & 0x3f;
+		gb->snd[0].length_counting = true;
 		break;
 	case NR12: /* Envelope (R/W) */
-		gb->snd_1.reg[2] = data;
-		gb->snd_1.envelope_value = data >> 4;
-		gb->snd_1.envelope_direction = (data & 0x8) ? 1 : -1;
-		gb->snd_1.envelope_time = data & 0x07;
-		if (!gb_dac_enabled(&gb->snd_1))
+		gb->snd[0].reg[2] = data;
+		gb->snd[0].envelope_value = data >> 4;
+		gb->snd[0].envelope_direction = (data & 0x8) ? 1 : -1;
+		gb->snd[0].envelope_time = data & 0x07;
+		if (!gb_dac_enabled(&gb->snd[0]))
 		{
-			gb->snd_1.on = false;
+			gb->snd[0].on = false;
 		}
 		break;
 	case NR13: /* Frequency lo (R/W) */
-		gb->snd_1.reg[3] = data;
+		gb->snd[0].reg[3] = data;
 		// Only enabling the frequency line breaks blarggs's sound test #5
 		// This condition may not be correct
-		if (!gb->snd_1.sweep_enabled)
+		if (!gb->snd[0].sweep_enabled)
 		{
-			gb->snd_1.frequency = ((gb->snd_1.reg[4] & 0x7) << 8) | gb->snd_1.reg[3];
+			gb->snd[0].frequency = ((gb->snd[0].reg[4] & 0x7) << 8) | gb->snd[0].reg[3];
 		}
 		break;
 	case NR14: /* Frequency hi / Initialize (R/W) */
-		gb->snd_1.reg[4] = data;
+		gb->snd[0].reg[4] = data;
 		{
-			bool length_was_enabled = gb->snd_1.length_enabled;
+			bool length_was_enabled = gb->snd[0].length_enabled;
 
-			gb->snd_1.length_enabled = (data & 0x40) ? true : false;
-			gb->snd_1.frequency = ((gb->snd_regs[NR14] & 0x7) << 8) | gb->snd_1.reg[3];
+			gb->snd[0].length_enabled = (data & 0x40) ? true : false;
+			gb->snd[0].frequency = ((gb->snd_regs[NR14] & 0x7) << 8) | gb->snd[0].reg[3];
 
-			if (!length_was_enabled && !(gb->snd_control.cycles & FRAME_CYCLES) && gb->snd_1.length_counting)
+			if (!length_was_enabled && !(gb->snd_control.cycles & FRAME_CYCLES) && gb->snd[0].length_counting)
 			{
-				if (gb->snd_1.length_enabled)
+				if (gb->snd[0].length_enabled)
 				{
-					gb_tick_length(&gb->snd_1);
+					gb_tick_length(&gb->snd[0]);
 				}
 			}
 
 			if (data & 0x80)
 			{
-				gb->snd_1.on = true;
-				gb->snd_1.envelope_enabled = true;
-				gb->snd_1.envelope_value = gb->snd_1.reg[2] >> 4;
-				gb->snd_1.envelope_count = gb->snd_1.envelope_time;
-				gb->snd_1.sweep_count = gb->snd_1.sweep_time;
-				gb->snd_1.sweep_neg_mode_used = false;
-				gb->snd_1.signal = 0;
+				gb->snd[0].on = true;
+				gb->snd[0].envelope_enabled = true;
+				gb->snd[0].envelope_value = gb->snd[0].reg[2] >> 4;
+				gb->snd[0].envelope_count = gb->snd[0].envelope_time;
+				gb->snd[0].sweep_count = gb->snd[0].sweep_time;
+				gb->snd[0].sweep_neg_mode_used = false;
+				gb->snd[0].signal = 0;
 				if (gb->LegacyMode)
-					gb->snd_1.length = gb->snd_1.reg[1] & 0x3f;	// VGM log fix -Valley Bell
-				gb->snd_1.length_counting = true;
-				gb->snd_1.frequency = ((gb->snd_1.reg[4] & 0x7) << 8) | gb->snd_1.reg[3];
-				gb->snd_1.frequency_counter = gb->snd_1.frequency;
-				gb->snd_1.cycles_left = 0;
-				gb->snd_1.duty_count = 0;
-				gb->snd_1.sweep_enabled = (gb->snd_1.sweep_shift != 0) || (gb->snd_1.sweep_time != 0);
-				if (!gb_dac_enabled(&gb->snd_1))
+					gb->snd[0].length = gb->snd[0].reg[1] & 0x3f;	// VGM log fix -Valley Bell
+				gb->snd[0].length_counting = true;
+				gb->snd[0].frequency = ((gb->snd[0].reg[4] & 0x7) << 8) | gb->snd[0].reg[3];
+				gb->snd[0].frequency_counter = gb->snd[0].frequency;
+				gb->snd[0].frequency_shadow = gb->snd[0].frequency;
+				gb->snd[0].cycles_left = 0;
+				gb->snd[0].duty_count = 0;
+				gb->snd[0].sweep_enabled = (gb->snd[0].sweep_shift != 0) || (gb->snd[0].sweep_time != 0);
+				if (!gb_dac_enabled(&gb->snd[0]))
 				{
-					gb->snd_1.on = false;
+					gb->snd[0].on = false;
 				}
-				if (gb->snd_1.sweep_shift > 0)
+				if (gb->snd[0].sweep_shift > 0)
 				{
-					gb_calculate_next_sweep(&gb->snd_1);
+					gb_calculate_next_sweep(&gb->snd[0]);
 				}
 
-				if (gb->snd_1.length == 0 && gb->snd_1.length_enabled && !(gb->snd_control.cycles & FRAME_CYCLES))
+				if (gb->snd[0].length == 0 && gb->snd[0].length_enabled && !(gb->snd_control.cycles & FRAME_CYCLES))
 				{
-					gb_tick_length(&gb->snd_1);
+					gb_tick_length(&gb->snd[0]);
 				}
 			}
 			else
 			{
 				// This condition may not be correct
-				if (!gb->snd_1.sweep_enabled)
+				if (!gb->snd[0].sweep_enabled)
 				{
-					gb->snd_1.frequency = ((gb->snd_1.reg[4] & 0x7) << 8) | gb->snd_1.reg[3];
+					gb->snd[0].frequency = ((gb->snd[0].reg[4] & 0x7) << 8) | gb->snd[0].reg[3];
 				}
 			}
 		}
@@ -487,206 +480,206 @@ static void gb_sound_w_internal(gb_sound_t *gb, UINT8 offset, UINT8 data)
 
 	/*MODE 2 */
 	case NR21: /* Sound length/Wave pattern duty (R/W) */
-		gb->snd_2.reg[1] = data;
+		gb->snd[1].reg[1] = data;
 		if (gb->snd_control.on)
 		{
-			gb->snd_2.duty = (data & 0xc0) >> 6;
+			gb->snd[1].duty = (data & 0xc0) >> 6;
 		}
-		gb->snd_2.length = data & 0x3f;
-		gb->snd_2.length_counting = true;
+		gb->snd[1].length = data & 0x3f;
+		gb->snd[1].length_counting = true;
 		break;
 	case NR22: /* Envelope (R/W) */
-		gb->snd_2.reg[2] = data;
-		gb->snd_2.envelope_value = data >> 4;
-		gb->snd_2.envelope_direction = (data & 0x8) ? 1 : -1;
-		gb->snd_2.envelope_time = data & 0x07;
-		if (!gb_dac_enabled(&gb->snd_2))
+		gb->snd[1].reg[2] = data;
+		gb->snd[1].envelope_value = data >> 4;
+		gb->snd[1].envelope_direction = (data & 0x8) ? 1 : -1;
+		gb->snd[1].envelope_time = data & 0x07;
+		if (!gb_dac_enabled(&gb->snd[1]))
 		{
-			gb->snd_2.on = false;
+			gb->snd[1].on = false;
 		}
 		break;
 	case NR23: /* Frequency lo (R/W) */
-		gb->snd_2.reg[3] = data;
-		gb->snd_2.frequency = ((gb->snd_2.reg[4] & 0x7) << 8) | gb->snd_2.reg[3];
+		gb->snd[1].reg[3] = data;
+		gb->snd[1].frequency = ((gb->snd[1].reg[4] & 0x7) << 8) | gb->snd[1].reg[3];
 		break;
 	case NR24: /* Frequency hi / Initialize (R/W) */
-		gb->snd_2.reg[4] = data;
+		gb->snd[1].reg[4] = data;
 		{
-			bool length_was_enabled = gb->snd_2.length_enabled;
+			bool length_was_enabled = gb->snd[1].length_enabled;
 
-			gb->snd_2.length_enabled = (data & 0x40) ? true : false;
+			gb->snd[1].length_enabled = (data & 0x40) ? true : false;
 
-			if (!length_was_enabled && !(gb->snd_control.cycles & FRAME_CYCLES) && gb->snd_2.length_counting)
+			if (!length_was_enabled && !(gb->snd_control.cycles & FRAME_CYCLES) && gb->snd[1].length_counting)
 			{
-				if (gb->snd_2.length_enabled)
+				if (gb->snd[1].length_enabled)
 				{
-					gb_tick_length(&gb->snd_2);
+					gb_tick_length(&gb->snd[1]);
 				}
 			}
 
 			if (data & 0x80)
 			{
-				gb->snd_2.on = true;
-				gb->snd_2.envelope_enabled = true;
-				gb->snd_2.envelope_value = gb->snd_2.reg[2] >> 4;
-				gb->snd_2.envelope_count = gb->snd_2.envelope_time;
-				gb->snd_2.frequency = ((gb->snd_2.reg[4] & 0x7) << 8) | gb->snd_2.reg[3];
-				gb->snd_2.frequency_counter = gb->snd_2.frequency;
-				gb->snd_2.cycles_left = 0;
-				gb->snd_2.duty_count = 0;
-				gb->snd_2.signal = 0;
+				gb->snd[1].on = true;
+				gb->snd[1].envelope_enabled = true;
+				gb->snd[1].envelope_value = gb->snd[1].reg[2] >> 4;
+				gb->snd[1].envelope_count = gb->snd[1].envelope_time;
+				gb->snd[1].frequency = ((gb->snd[1].reg[4] & 0x7) << 8) | gb->snd[1].reg[3];
+				gb->snd[1].frequency_counter = gb->snd[1].frequency;
+				gb->snd[1].cycles_left = 0;
+				gb->snd[1].duty_count = 0;
+				gb->snd[1].signal = 0;
 				if (gb->LegacyMode)
-					gb->snd_2.length = gb->snd_2.reg[1] & 0x3f;	// VGM log fix -Valley Bell
-				gb->snd_2.length_counting = true;
+					gb->snd[1].length = gb->snd[1].reg[1] & 0x3f;	// VGM log fix -Valley Bell
+				gb->snd[1].length_counting = true;
 
-				if (!gb_dac_enabled(&gb->snd_2))
+				if (!gb_dac_enabled(&gb->snd[1]))
 				{
-					gb->snd_2.on = false;
+					gb->snd[1].on = false;
 				}
 
-				if (gb->snd_2.length == 0 && gb->snd_2.length_enabled && !(gb->snd_control.cycles & FRAME_CYCLES))
+				if (gb->snd[1].length == 0 && gb->snd[1].length_enabled && !(gb->snd_control.cycles & FRAME_CYCLES))
 				{
-					gb_tick_length(&gb->snd_2);
+					gb_tick_length(&gb->snd[1]);
 				}
 			}
 			else
 			{
-				gb->snd_2.frequency = ((gb->snd_2.reg[4] & 0x7) << 8) | gb->snd_2.reg[3];
+				gb->snd[1].frequency = ((gb->snd[1].reg[4] & 0x7) << 8) | gb->snd[1].reg[3];
 			}
 		}
 		break;
 
 	/*MODE 3 */
 	case NR30: /* Sound On/Off (R/W) */
-		gb->snd_3.reg[0] = data;
-		if (!gb_dac_enabled(&gb->snd_3))
+		gb->snd[2].reg[0] = data;
+		if (!gb_dac_enabled(&gb->snd[2]))
 		{
-			gb->snd_3.on = false;
+			gb->snd[2].on = false;
 		}
 		else if (gb->LegacyMode)
-			gb->snd_3.on = true;	// even more VGM log fix -Valley Bell
+			gb->snd[2].on = true;	// even more VGM log fix -Valley Bell
 		break;
 	case NR31: /* Sound Length (R/W) */
-		gb->snd_3.reg[1] = data;
-		gb->snd_3.length = data;
-		gb->snd_3.length_counting = true;
+		gb->snd[2].reg[1] = data;
+		gb->snd[2].length = data;
+		gb->snd[2].length_counting = true;
 		break;
 	case NR32: /* Select Output Level */
-		gb->snd_3.reg[2] = data;
-		gb->snd_3.level = (data & 0x60) >> 5;
+		gb->snd[2].reg[2] = data;
+		gb->snd[2].level = (data & 0x60) >> 5;
 		break;
 	case NR33: /* Frequency lo (W) */
-		gb->snd_3.reg[3] = data;
-		gb->snd_3.frequency = ((gb->snd_3.reg[4] & 0x7) << 8) | gb->snd_3.reg[3];
+		gb->snd[2].reg[3] = data;
+		gb->snd[2].frequency = ((gb->snd[2].reg[4] & 0x7) << 8) | gb->snd[2].reg[3];
 		break;
 	case NR34: /* Frequency hi / Initialize (W) */
-		gb->snd_3.reg[4] = data;
+		gb->snd[2].reg[4] = data;
 		{
-			bool length_was_enabled = gb->snd_3.length_enabled;
+			bool length_was_enabled = gb->snd[2].length_enabled;
 
-			gb->snd_3.length_enabled = (data & 0x40) ? true : false;
+			gb->snd[2].length_enabled = (data & 0x40) ? true : false;
 
-			if (!length_was_enabled && !(gb->snd_control.cycles & FRAME_CYCLES) && gb->snd_3.length_counting)
+			if (!length_was_enabled && !(gb->snd_control.cycles & FRAME_CYCLES) && gb->snd[2].length_counting)
 			{
-				if (gb->snd_3.length_enabled)
+				if (gb->snd[2].length_enabled)
 				{
-					gb_tick_length(&gb->snd_3);
+					gb_tick_length(&gb->snd[2]);
 				}
 			}
 
 			if (data & 0x80)
 			{
-				if (gb->snd_3.on && gb->snd_3.frequency_counter == 0x7ff)
+				if (gb->snd[2].on && gb->snd[2].frequency_counter == 0x7ff)
 				{
 					gb_corrupt_wave_ram(gb);
 				}
-				gb->snd_3.on = true;
-				gb->snd_3.offset = 0;
-				gb->snd_3.duty = 1;
-				gb->snd_3.duty_count = 0;
+				gb->snd[2].on = true;
+				gb->snd[2].offset = 0;
+				gb->snd[2].duty = 1;
+				gb->snd[2].duty_count = 0;
 				if (gb->LegacyMode)
-					gb->snd_3.length = gb->snd_3.reg[1];	// VGM log fix -Valley Bell
-				gb->snd_3.length_counting = true;
-				gb->snd_3.frequency = ((gb->snd_3.reg[4] & 0x7) << 8) | gb->snd_3.reg[3];
-				gb->snd_3.frequency_counter = gb->snd_3.frequency;
+					gb->snd[2].length = gb->snd[2].reg[1];	// VGM log fix -Valley Bell
+				gb->snd[2].length_counting = true;
+				gb->snd[2].frequency = ((gb->snd[2].reg[4] & 0x7) << 8) | gb->snd[2].reg[3];
+				gb->snd[2].frequency_counter = gb->snd[2].frequency;
 				// There is a tiny bit of delay in starting up the wave channel
-				gb->snd_3.cycles_left = -6;
-				gb->snd_3.sample_reading = false;
+				gb->snd[2].cycles_left = -6;
+				gb->snd[2].sample_reading = false;
 
-				if (!gb_dac_enabled(&gb->snd_3))
+				if (!gb_dac_enabled(&gb->snd[2]))
 				{
-					gb->snd_3.on = false;
+					gb->snd[2].on = false;
 				}
 
-				if (gb->snd_3.length == 0 && gb->snd_3.length_enabled && !(gb->snd_control.cycles & FRAME_CYCLES))
+				if (gb->snd[2].length == 0 && gb->snd[2].length_enabled && !(gb->snd_control.cycles & FRAME_CYCLES))
 				{
-					gb_tick_length(&gb->snd_3);
+					gb_tick_length(&gb->snd[2]);
 				}
 			}
 			else
 			{
-				gb->snd_3.frequency = ((gb->snd_3.reg[4] & 0x7) << 8) | gb->snd_3.reg[3];
+				gb->snd[2].frequency = ((gb->snd[2].reg[4] & 0x7) << 8) | gb->snd[2].reg[3];
 			}
 		}
 		break;
 
 	/*MODE 4 */
 	case NR41: /* Sound Length (R/W) */
-		gb->snd_4.reg[1] = data;
-		gb->snd_4.length = data & 0x3f;
-		gb->snd_4.length_counting = true;
+		gb->snd[3].reg[1] = data;
+		gb->snd[3].length = data & 0x3f;
+		gb->snd[3].length_counting = true;
 		break;
 	case NR42: /* Envelope (R/W) */
-		gb->snd_4.reg[2] = data;
-		gb->snd_4.envelope_value = data >> 4;
-		gb->snd_4.envelope_direction = (data & 0x8) ? 1 : -1;
-		gb->snd_4.envelope_time = data & 0x07;
-		if (!gb_dac_enabled(&gb->snd_4))
+		gb->snd[3].reg[2] = data;
+		gb->snd[3].envelope_value = data >> 4;
+		gb->snd[3].envelope_direction = (data & 0x8) ? 1 : -1;
+		gb->snd[3].envelope_time = data & 0x07;
+		if (!gb_dac_enabled(&gb->snd[3]))
 		{
-			gb->snd_4.on = false;
+			gb->snd[3].on = false;
 		}
 		break;
 	case NR43: /* Polynomial Counter/Frequency */
-		gb->snd_4.reg[3] = data;
-		gb->snd_4.noise_short = (data & 0x8);
+		gb->snd[3].reg[3] = data;
+		gb->snd[3].noise_short = (data & 0x8);
 		break;
 	case NR44: /* Counter/Consecutive / Initialize (R/W)  */
-		gb->snd_4.reg[4] = data;
+		gb->snd[3].reg[4] = data;
 		{
-			bool length_was_enabled = gb->snd_4.length_enabled;
+			bool length_was_enabled = gb->snd[3].length_enabled;
 
-			gb->snd_4.length_enabled = (data & 0x40) ? true : false;
+			gb->snd[3].length_enabled = (data & 0x40) ? true : false;
 
-			if (!length_was_enabled && !(gb->snd_control.cycles & FRAME_CYCLES) && gb->snd_4.length_counting)
+			if (!length_was_enabled && !(gb->snd_control.cycles & FRAME_CYCLES) && gb->snd[3].length_counting)
 			{
-				if (gb->snd_4.length_enabled)
+				if (gb->snd[3].length_enabled)
 				{
-					gb_tick_length(&gb->snd_4);
+					gb_tick_length(&gb->snd[3]);
 				}
 			}
 
 			if (data & 0x80)
 			{
-				gb->snd_4.on = true;
-				gb->snd_4.envelope_enabled = true;
-				gb->snd_4.envelope_value = gb->snd_4.reg[2] >> 4;
-				gb->snd_4.envelope_count = gb->snd_4.envelope_time;
-				gb->snd_4.frequency_counter = 0;
-				gb->snd_4.cycles_left = gb_noise_period_cycles(gb);
-				gb->snd_4.signal = -1;
-				gb->snd_4.noise_lfsr = 0x7fff;
+				gb->snd[3].on = true;
+				gb->snd[3].envelope_enabled = true;
+				gb->snd[3].envelope_value = gb->snd[3].reg[2] >> 4;
+				gb->snd[3].envelope_count = gb->snd[3].envelope_time;
+				gb->snd[3].frequency_counter = 0;
+				gb->snd[3].cycles_left = gb_noise_period_cycles(gb);
+				gb->snd[3].signal = -1;
+				gb->snd[3].noise_lfsr = 0x7fff;
 				if (gb->LegacyMode)
-					gb->snd_4.length = gb->snd_4.reg[1] & 0x3f;	// VGM log fix -Valley Bell
-				gb->snd_4.length_counting = true;
+					gb->snd[3].length = gb->snd[3].reg[1] & 0x3f;	// VGM log fix -Valley Bell
+				gb->snd[3].length_counting = true;
 
-				if (!gb_dac_enabled(&gb->snd_4))
+				if (!gb_dac_enabled(&gb->snd[3]))
 				{
-					gb->snd_4.on = false;
+					gb->snd[3].on = false;
 				}
 
-				if (gb->snd_4.length == 0 && gb->snd_4.length_enabled && !(gb->snd_control.cycles & FRAME_CYCLES))
+				if (gb->snd[3].length == 0 && gb->snd[3].length_enabled && !(gb->snd_control.cycles & FRAME_CYCLES))
 				{
-					gb_tick_length(&gb->snd_4);
+					gb_tick_length(&gb->snd[3]);
 				}
 			}
 		}
@@ -698,14 +691,14 @@ static void gb_sound_w_internal(gb_sound_t *gb, UINT8 offset, UINT8 data)
 		gb->snd_control.vol_right = (data & 0x70) >> 4;
 		break;
 	case NR51: /* Selection of Sound Output Terminal */
-		gb->snd_control.mode1_right = data & 0x1;
-		gb->snd_control.mode1_left = (data & 0x10) >> 4;
-		gb->snd_control.mode2_right = (data & 0x2) >> 1;
-		gb->snd_control.mode2_left = (data & 0x20) >> 5;
-		gb->snd_control.mode3_right = (data & 0x4) >> 2;
-		gb->snd_control.mode3_left = (data & 0x40) >> 6;
-		gb->snd_control.mode4_right = (data & 0x8) >> 3;
-		gb->snd_control.mode4_left = (data & 0x80) >> 7;
+		gb->snd_control.chan_right[0] = data & 0x1;
+		gb->snd_control.chan_left[0] = (data & 0x10) >> 4;
+		gb->snd_control.chan_right[1] = (data & 0x2) >> 1;
+		gb->snd_control.chan_left[1] = (data & 0x20) >> 5;
+		gb->snd_control.chan_right[2] = (data & 0x4) >> 2;
+		gb->snd_control.chan_left[2] = (data & 0x40) >> 6;
+		gb->snd_control.chan_right[3] = (data & 0x8) >> 3;
+		gb->snd_control.chan_left[3] = (data & 0x80) >> 7;
 		break;
 	case NR52: // Sound On/Off (R/W)
 		// Only bit 7 is writable, writing to bits 0-3 does NOT enable or disable sound. They are read-only.
@@ -763,16 +756,16 @@ static void gb_corrupt_wave_ram(gb_sound_t *gb)
 	if (gb->gbMode != GBMODE_DMG || gb->NoWaveCorrupt)
 		return;
 
-	if (gb->snd_3.offset < 8)
+	if (gb->snd[2].offset < 8)
 	{
-		gb->snd_regs[AUD3W0] = gb->snd_regs[AUD3W0 + (gb->snd_3.offset/2)];
+		gb->snd_regs[AUD3W0] = gb->snd_regs[AUD3W0 + (gb->snd[2].offset/2)];
 	}
 	else
 	{
 		int i;
 		for (i = 0; i < 4; i++)
 		{
-			gb->snd_regs[AUD3W0 + i] = gb->snd_regs[AUD3W0 + ((gb->snd_3.offset / 2) & ~0x03) + i];
+			gb->snd_regs[AUD3W0 + i] = gb->snd_regs[AUD3W0 + ((gb->snd[2].offset / 2) & ~0x03) + i];
 		}
 	}
 }
@@ -786,71 +779,72 @@ static void gb_apu_power_off(gb_sound_t *gb)
 	{
 	case GBMODE_DMG:
 		gb_sound_w_internal(gb, NR10, 0x00);
-		gb->snd_1.duty = 0;
+		gb->snd[0].duty = 0;
 		gb->snd_regs[NR11] = 0;
 		gb_sound_w_internal(gb, NR12, 0x00);
 		gb_sound_w_internal(gb, NR13, 0x00);
 		gb_sound_w_internal(gb, NR14, 0x00);
-		gb->snd_1.length_counting = false;
-		gb->snd_1.sweep_neg_mode_used = false;
+		gb->snd[0].frequency_shadow = 0;
+		gb->snd[0].length_counting = false;
+		gb->snd[0].sweep_neg_mode_used = false;
 
 		gb->snd_regs[NR21] = 0;
 		gb_sound_w_internal(gb, NR22, 0x00);
 		gb_sound_w_internal(gb, NR23, 0x00);
 		gb_sound_w_internal(gb, NR24, 0x00);
-		gb->snd_2.length_counting = false;
+		gb->snd[1].length_counting = false;
 
 		gb_sound_w_internal(gb, NR30, 0x00);
 		gb_sound_w_internal(gb, NR32, 0x00);
 		gb_sound_w_internal(gb, NR33, 0x00);
 		gb_sound_w_internal(gb, NR34, 0x00);
-		gb->snd_3.length_counting = false;
-		gb->snd_3.current_sample = 0;
+		gb->snd[2].length_counting = false;
+		gb->snd[2].current_sample = 0;
 
 		gb->snd_regs[NR41] = 0;
 		gb_sound_w_internal(gb, NR42, 0x00);
 		gb_sound_w_internal(gb, NR43, 0x00);
 		gb_sound_w_internal(gb, NR44, 0x00);
-		gb->snd_4.length_counting = false;
-		gb->snd_4.cycles_left = gb_noise_period_cycles(gb);
+		gb->snd[3].length_counting = false;
+		gb->snd[3].cycles_left = gb_noise_period_cycles(gb);
 		break;
 	case GBMODE_CGB04:
 		gb_sound_w_internal(gb, NR10, 0x00);
-		gb->snd_1.duty = 0;
+		gb->snd[0].duty = 0;
 		gb_sound_w_internal(gb, NR11, 0x00);
 		gb_sound_w_internal(gb, NR12, 0x00);
 		gb_sound_w_internal(gb, NR13, 0x00);
 		gb_sound_w_internal(gb, NR14, 0x00);
-		gb->snd_1.length_counting = false;
-		gb->snd_1.sweep_neg_mode_used = false;
+		gb->snd[0].length_counting = false;
+		gb->snd[0].sweep_neg_mode_used = false;
 
 		gb_sound_w_internal(gb, NR21, 0x00);
 		gb_sound_w_internal(gb, NR22, 0x00);
 		gb_sound_w_internal(gb, NR23, 0x00);
 		gb_sound_w_internal(gb, NR24, 0x00);
-		gb->snd_2.length_counting = false;
+		gb->snd[1].length_counting = false;
 
 		gb_sound_w_internal(gb, NR30, 0x00);
 		gb_sound_w_internal(gb, NR31, 0x00);
 		gb_sound_w_internal(gb, NR32, 0x00);
 		gb_sound_w_internal(gb, NR33, 0x00);
 		gb_sound_w_internal(gb, NR34, 0x00);
-		gb->snd_3.length_counting = false;
-		gb->snd_3.current_sample = 0;
+		gb->snd[2].length_counting = false;
+		gb->snd[2].current_sample = 0;
 
 		gb_sound_w_internal(gb, NR41, 0x00);
 		gb_sound_w_internal(gb, NR42, 0x00);
 		gb_sound_w_internal(gb, NR43, 0x00);
 		gb_sound_w_internal(gb, NR44, 0x00);
-		gb->snd_4.length_counting = false;
-		gb->snd_4.cycles_left = gb_noise_period_cycles(gb);
+		gb->snd[3].length_counting = false;
+		gb->snd[3].cycles_left = gb_noise_period_cycles(gb);
 		break;
 	}
 
-	gb->snd_1.on = false;
-	gb->snd_2.on = false;
-	gb->snd_3.on = false;
-	gb->snd_4.on = false;
+	gb->snd[0].on = false;
+	gb->snd[1].on = false;
+	gb->snd[2].on = false;
+	gb->snd[3].on = false;
 
 	gb->snd_control.wave_ram_locked = false;
 
@@ -881,7 +875,7 @@ static INT32 gb_calculate_next_sweep(struct SOUND *snd)
 {
 	INT32 new_frequency;
 	snd->sweep_neg_mode_used = (snd->sweep_direction < 0);
-	new_frequency = snd->frequency + snd->sweep_direction * (snd->frequency >> snd->sweep_shift);
+	new_frequency = snd->frequency_shadow + snd->sweep_direction * (snd->frequency_shadow >> snd->sweep_shift);
 
 	if (new_frequency > 0x7FF)
 	{
@@ -899,7 +893,9 @@ static void gb_apply_next_sweep(struct SOUND *snd)
 	if (snd->on && snd->sweep_shift > 0)
 	{
 		snd->frequency = new_frequency;
+		snd->frequency_shadow = snd->frequency;
 		snd->reg[3] = snd->frequency & 0xFF;
+		snd->reg[4] = (snd->reg[4] & ~0x7) | ((snd->frequency >> 8) & 0x7);
 	}
 }
 
@@ -975,7 +971,8 @@ static void gb_update_square_channel(struct SOUND *snd, UINT32 cycles)
 			counter = 1 + cycles / distance;
 
 			snd->duty_count = (snd->duty_count + counter) & 0x07;
-			snd->signal = wave_duty_table[snd->duty][snd->duty_count];
+			snd->signal = (wave_duty_table[snd->duty] >> snd->duty_count) & 0x01;
+			snd->signal = snd->signal * 2 - 1;	// make bipolar
 
 			snd->frequency_counter = snd->frequency + cycles % distance;
 		}
@@ -1014,16 +1011,16 @@ static void gb_update_wave_channel(gb_sound_t *gb, struct SOUND *snd, UINT32 cyc
 				{
 					snd->current_sample >>= 4;
 				}
-				snd->current_sample = (snd->current_sample & 0x0f) - 8;
+				snd->current_sample &= 0x0f;
+				snd->current_sample -= 8;	// make bipolar
 				if (gb->BoostWaveChn)
 					snd->current_sample <<= 1;
-
-				snd->signal = snd->level ? snd->current_sample / (1 << (snd->level - 1)) : 0;
 
 				// Reload frequency counter
 				snd->frequency_counter = snd->frequency;
 			}
 		}
+		snd->signal = snd->level ? snd->current_sample / (1 << (snd->level - 1)) : 0;
 	}
 }
 
@@ -1032,20 +1029,20 @@ static void gb_update_noise_channel(gb_sound_t *gb, struct SOUND *snd, UINT32 cy
 {
 	UINT32 period = gb_noise_period_cycles(gb);
 	snd->cycles_left += cycles;
-	while (snd->cycles_left >= period)
+	while (snd->cycles_left >= (INT32)period)
 	{
 		UINT16 feedback;
 		snd->cycles_left -= period;
 
 		// Using a Polynomial Counter (aka Linear Feedback Shift Register)
-		// Mode 4 has a 15 bit counter so we need to shift the bits around accordingly.
+		// Channel 4 has a 15 bit counter so we need to shift the bits around accordingly.
 		feedback = ((snd->noise_lfsr >> 1) ^ snd->noise_lfsr) & 1;
 		snd->noise_lfsr = (snd->noise_lfsr >> 1) | (feedback << 14);
 		if (snd->noise_short)
 		{
 			snd->noise_lfsr = (snd->noise_lfsr & ~(1 << 6)) | (feedback << 6);
 		}
-		snd->signal = (snd->noise_lfsr & 1) ? -1 : 1;
+		snd->signal = (~snd->noise_lfsr & 1) ? 1 : -1;
 	}
 }
 
@@ -1065,10 +1062,10 @@ static void gb_update_state(gb_sound_t *gb, UINT32 cycles)
 		// Left over cycles in current frame
 		UINT32 cycles_current_frame = FRAME_CYCLES - (old_cycles & (FRAME_CYCLES - 1));
 
-		gb_update_square_channel(&gb->snd_1, cycles_current_frame);
-		gb_update_square_channel(&gb->snd_2, cycles_current_frame);
-		gb_update_wave_channel(gb, &gb->snd_3, cycles_current_frame);
-		gb_update_noise_channel(gb, &gb->snd_4, cycles_current_frame);
+		gb_update_square_channel(&gb->snd[0], cycles_current_frame);
+		gb_update_square_channel(&gb->snd[1], cycles_current_frame);
+		gb_update_wave_channel(gb, &gb->snd[2], cycles_current_frame);
+		gb_update_noise_channel(gb, &gb->snd[3], cycles_current_frame);
 
 		cycles -= cycles_current_frame;
 
@@ -1077,56 +1074,56 @@ static void gb_update_state(gb_sound_t *gb, UINT32 cycles)
 		{
 		case 0:
 			// length
-			gb_tick_length(&gb->snd_1);
-			gb_tick_length(&gb->snd_2);
-			gb_tick_length(&gb->snd_3);
-			gb_tick_length(&gb->snd_4);
+			gb_tick_length(&gb->snd[0]);
+			gb_tick_length(&gb->snd[1]);
+			gb_tick_length(&gb->snd[2]);
+			gb_tick_length(&gb->snd[3]);
 			break;
 		case 2:
 			// sweep
-			gb_tick_sweep(&gb->snd_1);
+			gb_tick_sweep(&gb->snd[0]);
 			// length
-			gb_tick_length(&gb->snd_1);
-			gb_tick_length(&gb->snd_2);
-			gb_tick_length(&gb->snd_3);
-			gb_tick_length(&gb->snd_4);
+			gb_tick_length(&gb->snd[0]);
+			gb_tick_length(&gb->snd[1]);
+			gb_tick_length(&gb->snd[2]);
+			gb_tick_length(&gb->snd[3]);
 			break;
 		case 4:
 			// length
-			gb_tick_length(&gb->snd_1);
-			gb_tick_length(&gb->snd_2);
-			gb_tick_length(&gb->snd_3);
-			gb_tick_length(&gb->snd_4);
+			gb_tick_length(&gb->snd[0]);
+			gb_tick_length(&gb->snd[1]);
+			gb_tick_length(&gb->snd[2]);
+			gb_tick_length(&gb->snd[3]);
 			break;
 		case 6:
 			// sweep
-			gb_tick_sweep(&gb->snd_1);
+			gb_tick_sweep(&gb->snd[0]);
 			// length
-			gb_tick_length(&gb->snd_1);
-			gb_tick_length(&gb->snd_2);
-			gb_tick_length(&gb->snd_3);
-			gb_tick_length(&gb->snd_4);
+			gb_tick_length(&gb->snd[0]);
+			gb_tick_length(&gb->snd[1]);
+			gb_tick_length(&gb->snd[2]);
+			gb_tick_length(&gb->snd[3]);
 			break;
 		case 7:
 			// update envelope
-			gb_tick_envelope(&gb->snd_1);
-			gb_tick_envelope(&gb->snd_2);
-			gb_tick_envelope(&gb->snd_4);
+			gb_tick_envelope(&gb->snd[0]);
+			gb_tick_envelope(&gb->snd[1]);
+			gb_tick_envelope(&gb->snd[3]);
 			break;
 		}
 	}
 
-	gb_update_square_channel(&gb->snd_1, cycles);
-	gb_update_square_channel(&gb->snd_2, cycles);
-	gb_update_wave_channel(gb, &gb->snd_3, cycles);
-	gb_update_noise_channel(gb, &gb->snd_4, cycles);
+	gb_update_square_channel(&gb->snd[0], cycles);
+	gb_update_square_channel(&gb->snd[1], cycles);
+	gb_update_wave_channel(gb, &gb->snd[2], cycles);
+	gb_update_noise_channel(gb, &gb->snd[3], cycles);
 }
 
 
 INLINE UINT32 gb_noise_period_cycles(gb_sound_t *gb)
 {
 	static const UINT32 divisor[8] = { 8, 16,32, 48, 64, 80, 96, 112 };
-	return divisor[gb->snd_4.reg[3] & 7] << (gb->snd_4.reg[3] >> 4);
+	return divisor[gb->snd[3].reg[3] & 7] << (gb->snd[3].reg[3] >> 4);
 }
 
 
@@ -1145,49 +1142,49 @@ static void gameboy_update(void *chip, UINT32 samples, DEV_SMPL **outputs)
 		RC_MASK(&gb->cycleCntr);
 
 		/* Mode 1 - Wave with Envelope and Sweep */
-		if (gb->snd_1.on && !gb->snd_1.Muted)
+		if (gb->snd[0].on && !gb->snd[0].Muted)
 		{
-			sample = gb->snd_1.signal * gb->snd_1.envelope_value;
+			sample = gb->snd[0].signal * gb->snd[0].envelope_value;
 
-			if (gb->snd_control.mode1_left)
+			if (gb->snd_control.chan_left[0])
 				left += sample;
-			if (gb->snd_control.mode1_right)
+			if (gb->snd_control.chan_right[0])
 				right += sample;
 		}
 
 		/* Mode 2 - Wave with Envelope */
-		if (gb->snd_2.on && !gb->snd_2.Muted)
+		if (gb->snd[1].on && !gb->snd[1].Muted)
 		{
-			sample = gb->snd_2.signal * gb->snd_2.envelope_value;
-			if (gb->snd_control.mode2_left)
+			sample = gb->snd[1].signal * gb->snd[1].envelope_value;
+			if (gb->snd_control.chan_left[1])
 				left += sample;
-			if (gb->snd_control.mode2_right)
+			if (gb->snd_control.chan_right[1])
 				right += sample;
 		}
 
 		/* Mode 3 - Wave patterns from WaveRAM */
-		if (gb->snd_3.on && !gb->snd_3.Muted)
+		if (gb->snd[2].on && !gb->snd[2].Muted)
 		{
-			sample = gb->snd_3.signal;
-			if (gb->snd_control.mode3_left)
+			sample = gb->snd[2].signal;
+			if (gb->snd_control.chan_left[2])
 				left += sample;
-			if (gb->snd_control.mode3_right)
+			if (gb->snd_control.chan_right[2])
 				right += sample;
 		}
 
 		/* Mode 4 - Noise with Envelope */
-		if (gb->snd_4.on && !gb->snd_4.Muted)
+		if (gb->snd[3].on && !gb->snd[3].Muted)
 		{
-			sample = gb->snd_4.signal * gb->snd_4.envelope_value;
-			if (gb->snd_control.mode4_left)
+			sample = gb->snd[3].signal * gb->snd[3].envelope_value;
+			if (gb->snd_control.chan_left[3])
 				left += sample;
-			if (gb->snd_control.mode4_right)
+			if (gb->snd_control.chan_right[3])
 				right += sample;
 		}
 
 		/* Adjust for master volume */
-		left *= gb->snd_control.vol_left;
-		right *= gb->snd_control.vol_right;
+		left *= 1 + gb->snd_control.vol_left;
+		right *= 1 + gb->snd_control.vol_right;
 
 		/* pump up the volume */
 		left <<= 6;
@@ -1198,7 +1195,7 @@ static void gameboy_update(void *chip, UINT32 samples, DEV_SMPL **outputs)
 		outputs[1][i] = right;
 	}
 
-	gb->snd_regs[NR52] = (gb->snd_regs[NR52]&0xf0) | gb->snd_1.on | (gb->snd_2.on << 1) | (gb->snd_3.on << 2) | (gb->snd_4.on << 3);
+	gb->snd_regs[NR52] = (gb->snd_regs[NR52]&0xf0) | gb->snd[0].on | (gb->snd[1].on << 1) | (gb->snd[2].on << 2) | (gb->snd[3].on << 3);
 }
 
 
@@ -1245,21 +1242,21 @@ static void device_reset_gameboy_sound(void *chip)
 
 	RC_RESET(&gb->cycleCntr);
 
-	memset(&gb->snd_1, 0, sizeof(gb->snd_1));
-	memset(&gb->snd_2, 0, sizeof(gb->snd_2));
-	memset(&gb->snd_3, 0, sizeof(gb->snd_3));
-	memset(&gb->snd_4, 0, sizeof(gb->snd_4));
+	memset(&gb->snd[0], 0, sizeof(gb->snd[0]));
+	memset(&gb->snd[1], 0, sizeof(gb->snd[1]));
+	memset(&gb->snd[2], 0, sizeof(gb->snd[2]));
+	memset(&gb->snd[3], 0, sizeof(gb->snd[3]));
 
 	gameboy_sound_set_mute_mask(gb, muteMask);
 
-	gb->snd_1.channel = 1;
-	gb->snd_1.length_mask = 0x3F;
-	gb->snd_2.channel = 2;
-	gb->snd_2.length_mask = 0x3F;
-	gb->snd_3.channel = 3;
-	gb->snd_3.length_mask = 0xFF;
-	gb->snd_4.channel = 4;
-	gb->snd_4.length_mask = 0x3F;
+	gb->snd[0].channel = 1;
+	gb->snd[0].length_mask = 0x3F;
+	gb->snd[1].channel = 2;
+	gb->snd[1].length_mask = 0x3F;
+	gb->snd[2].channel = 3;
+	gb->snd[2].length_mask = 0xFF;
+	gb->snd[3].channel = 4;
+	gb->snd[3].length_mask = 0x3F;
 
 	gb_sound_w_internal(gb, NR52, 0x00);
 	switch(gb->gbMode)
@@ -1309,10 +1306,10 @@ static void gameboy_sound_set_mute_mask(void *chip, UINT32 MuteMask)
 {
 	gb_sound_t *gb = (gb_sound_t *)chip;
 	
-	gb->snd_1.Muted = (MuteMask >> 0) & 0x01;
-	gb->snd_2.Muted = (MuteMask >> 1) & 0x01;
-	gb->snd_3.Muted = (MuteMask >> 2) & 0x01;
-	gb->snd_4.Muted = (MuteMask >> 3) & 0x01;
+	gb->snd[0].Muted = (MuteMask >> 0) & 0x01;
+	gb->snd[1].Muted = (MuteMask >> 1) & 0x01;
+	gb->snd[2].Muted = (MuteMask >> 2) & 0x01;
+	gb->snd[3].Muted = (MuteMask >> 3) & 0x01;
 	
 	return;
 }
@@ -1322,10 +1319,10 @@ static UINT32 gameboy_sound_get_mute_mask(void *chip)
 	gb_sound_t *gb = (gb_sound_t *)chip;
 	UINT32 muteMask;
 	
-	muteMask =	(gb->snd_1.Muted << 0) |
-				(gb->snd_2.Muted << 1) |
-				(gb->snd_3.Muted << 2) |
-				(gb->snd_4.Muted << 3);
+	muteMask =	(gb->snd[0].Muted << 0) |
+				(gb->snd[1].Muted << 1) |
+				(gb->snd[2].Muted << 2) |
+				(gb->snd[3].Muted << 3);
 	
 	return muteMask;
 }

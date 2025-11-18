@@ -87,8 +87,8 @@
 	{0x29, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // 40 Mikey register write
 	{0x2A, 0x03, &VGMPlayer::Cmd_K007232_Reg},          // 41 K007232 register write
 	{0x2B, 0x03, &VGMPlayer::Cmd_Ofs4_Data12},          // 42 K005289 register write
-	{0x2D, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // 43 ICS2115 register write
-	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 44
+	{0x2D, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // 43 MSM5232 register write
+	{0x2E, 0x03, &VGMPlayer::Cmd_Ofs8_Data8},           // 44 ICS2115 register write
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 45
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 46
 	{0xFF, 0x03, &VGMPlayer::Cmd_unknown},              // 47
@@ -821,6 +821,8 @@ void VGMPlayer::Cmd_PcmRamWrite(void)
 	const UINT8* ROMData = &_pcmBank[dbType].data[dbPos];
 	if (! dataLen)
 		dataLen += 0x01000000;
+	if (_pcmBank[dbType].data.size() - dbPos > dataLen)
+		return;	// just outright ignore writes that would go out-of-bounds
 	
 	if (chipType == 0x14)	// NES APU
 	{

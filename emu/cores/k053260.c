@@ -146,6 +146,7 @@ const DEV_DECL sndDev_K053260 =
 // Pan multipliers.  Set according to integer angles in degrees, amusingly.
 // Exact precision hard to know, the floating point-ish output format makes
 // comparisons iffy.  So we used a 1.16 format.
+// TODO: actually LUT-based - mentioned in RE'd schematics.
 static const int pan_mul[8][2] =
 {
     {     0,     0 }, // No sound for pan 0

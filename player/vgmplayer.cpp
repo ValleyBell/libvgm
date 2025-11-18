@@ -19,12 +19,13 @@
 #include "../emu/cores/segapcm.h"		// for SEGAPCM_CFG
 #include "../emu/cores/ayintf.h"		// for AY8910_CFG
 #include "../emu/cores/gb.h"
-#include "../emu/cores/okim6258.h"		// for OKIM6258_CFG
+#include "../emu/cores/okim6258.h"		// for MSM6258_CFG
 #include "../emu/cores/k054539.h"
 #include "../emu/cores/c140.h"
 #include "../emu/cores/qsoundintf.h"
 #include "../emu/cores/scsp.h"
 #include "../emu/cores/msm5205.h"		// for MSM5205_CFG
+#include "../emu/cores/msm5232.h"		// for MSM5232_CFG
 
 #include "dblk_compr.h"
 #include "../utils/StrUtils.h"
@@ -39,20 +40,20 @@
 {
 	DEVID_SN76496, DEVID_YM2413, DEVID_YM2612, DEVID_YM2151, DEVID_SEGAPCM, DEVID_RF5C68, DEVID_YM2203, DEVID_YM2608,
 	DEVID_YM2610, DEVID_YM3812, DEVID_YM3526, DEVID_Y8950, DEVID_YMF262, DEVID_YMF278B, DEVID_YMF271, DEVID_YMZ280B,
-	DEVID_32X_PWM, DEVID_AY8910, DEVID_GB_DMG, DEVID_NES_APU, DEVID_YMW258, DEVID_uPD7759, DEVID_OKIM6258, DEVID_OKIM6295,
+	DEVID_32X_PWM, DEVID_AY8910, DEVID_GB_DMG, DEVID_NES_APU, DEVID_YMW258, DEVID_uPD7759, DEVID_MSM6258, DEVID_MSM6295,
 	DEVID_K051649, DEVID_K054539, DEVID_C6280, DEVID_C140, DEVID_C219, DEVID_K053260, DEVID_POKEY, DEVID_QSOUND,
 	DEVID_SCSP, DEVID_WSWAN, DEVID_VBOY_VSU, DEVID_SAA1099, DEVID_ES5503, DEVID_ES5506, DEVID_X1_010, DEVID_C352,
-	DEVID_GA20, DEVID_MIKEY, DEVID_K007232, DEVID_K005289, DEVID_MSM5205, DEVID_ICS2115,
+	DEVID_GA20, DEVID_MIKEY, DEVID_K007232, DEVID_K005289, DEVID_MSM5205, DEVID_MSM5232, DEVID_ICS2115, 
 };
 
 /*static*/ const DEV_ID VGMPlayer::_DEV_LIST[_CHIP_COUNT] =
 {
 	DEVID_SN76496, DEVID_YM2413, DEVID_YM2612, DEVID_YM2151, DEVID_SEGAPCM, DEVID_RF5C68, DEVID_YM2203, DEVID_YM2608,
 	DEVID_YM2610, DEVID_YM3812, DEVID_YM3526, DEVID_Y8950, DEVID_YMF262, DEVID_YMF278B, DEVID_YMF271, DEVID_YMZ280B,
-	DEVID_RF5C68, DEVID_32X_PWM, DEVID_AY8910, DEVID_GB_DMG, DEVID_NES_APU, DEVID_YMW258, DEVID_uPD7759, DEVID_OKIM6258,
-	DEVID_OKIM6295, DEVID_K051649, DEVID_K054539, DEVID_C6280, DEVID_C140, DEVID_K053260, DEVID_POKEY, DEVID_QSOUND,
+	DEVID_RF5C68, DEVID_32X_PWM, DEVID_AY8910, DEVID_GB_DMG, DEVID_NES_APU, DEVID_YMW258, DEVID_uPD7759, DEVID_MSM6258,
+	DEVID_MSM6295, DEVID_K051649, DEVID_K054539, DEVID_C6280, DEVID_C140, DEVID_K053260, DEVID_POKEY, DEVID_QSOUND,
 	DEVID_SCSP, DEVID_WSWAN, DEVID_VBOY_VSU, DEVID_SAA1099, DEVID_ES5503, DEVID_ES5506, DEVID_X1_010, DEVID_C352,
-	DEVID_GA20, DEVID_MIKEY, DEVID_K007232, DEVID_K005289, DEVID_MSM5205, DEVID_ICS2115, 
+	DEVID_GA20, DEVID_MIKEY, DEVID_K007232, DEVID_K005289, DEVID_MSM5205, DEVID_MSM5232, DEVID_ICS2115, 
 };
 
 /*static*/ const UINT32 VGMPlayer::_CHIPCLK_OFS[_CHIP_COUNT] =
@@ -62,7 +63,7 @@
 	0x6C, 0x70, 0x74, 0x80, 0x84, 0x88, 0x8C, 0x90,
 	0x98, 0x9C, 0xA0, 0xA4, 0xA8, 0xAC, 0xB0, 0xB4,
 	0xB8, 0xC0, 0xC4, 0xC8, 0xCC, 0xD0, 0xD8, 0xDC,
-	0xE0, 0xE4, 0xE8, 0xEC, 0xF0, 0xF4,
+	0xE0, 0xE4, 0xE8, 0xEC, 0xF0, 0xF4, 0xF8,
 };
 /*static*/ const UINT16 VGMPlayer::_CHIP_VOLUME[_CHIP_COUNT] =
 {	0x80, 0x200, 0x100, 0x100, 0x180, 0xB0, 0x100, 0x80,
@@ -70,7 +71,7 @@
 	0x80, 0xE0, 0x100, 0xC0, 0x100, 0x40, 0x11E, 0x1C0,
 	0x100, 0xA0, 0x100, 0x100, 0x100, 0x100, 0x100, 0x100,
 	0x20, 0x100, 0x100, 0x100, 0x40, 0x20, 0x100, 0x40,
-	0x280, 0x100, 0x100, 0x100, 0x100, 0x800,
+	0x280, 0x100, 0x100, 0x100, 0x100, 0x100, 0x800, 
 };
 /*static*/ const UINT16 VGMPlayer::_PB_VOL_AMNT[_CHIP_COUNT] =
 {	0x100, 0x80, 0x100, 0x100, 0x100, 0x100, 0x100, 0x100,
@@ -78,7 +79,7 @@
 	0x200, 0x100, 0x200, 0x400, 0x200, 0x400, 0x100, 0x200,
 	0x200, 0x100, 0x100, 0x100, 0x180, 0x100, 0x100, 0x100,
 	0x800, 0x100, 0x100, 0x100, 0x800, 0x1000, 0x100, 0x800,
-	0x100, 0x200, 0x100, 0x100, 0x200, 0x40,
+	0x100, 0x200, 0x100, 0x100, 0x200, 0x100, 0x40, 
 };
 
 /*static*/ const char* const VGMPlayer::_TAG_TYPE_LIST[_TAG_COUNT] =
@@ -1250,16 +1251,16 @@ void VGMPlayer::GenerateDeviceConfig(void)
 				devCfg.clock = devCfg.clock * 224 / 180;	// fix VGM clock, which is based on the old /180 clock divider
 				SaveDeviceConfig(sdCfg.cfgData, &devCfg, sizeof(DEV_GEN_CFG));
 				break;
-			case DEVID_OKIM6258:
+			case DEVID_MSM6258:
 				{
-					OKIM6258_CFG okiCfg;
+					MSM6258_CFG okiCfg;
 					
 					okiCfg._genCfg = devCfg;
 					okiCfg.divider = (_hdrBuffer[0x94] & 0x03) >> 0;
-					okiCfg.adpcmBits = (_hdrBuffer[0x94] & 0x04) ? OKIM6258_ADPCM_4B : OKIM6258_ADPCM_3B;
-					okiCfg.outputBits = (_hdrBuffer[0x94] & 0x08) ? OKIM6258_OUT_12B : OKIM6258_OUT_10B;
+					okiCfg.adpcmBits = (_hdrBuffer[0x94] & 0x04) ? MSM6258_ADPCM_4B : MSM6258_ADPCM_3B;
+					okiCfg.outputBits = (_hdrBuffer[0x94] & 0x08) ? MSM6258_OUT_12B : MSM6258_OUT_10B;
 					
-					SaveDeviceConfig(sdCfg.cfgData, &okiCfg, sizeof(OKIM6258_CFG));
+					SaveDeviceConfig(sdCfg.cfgData, &okiCfg, sizeof(MSM6258_CFG));
 				}
 				break;
 			case DEVID_K054539:
@@ -1321,6 +1322,23 @@ void VGMPlayer::GenerateDeviceConfig(void)
 					devCfg.clock *= 512;	// (for backwards compatibility with old VGM logs from 2012-14)
 				SaveDeviceConfig(sdCfg.cfgData, &devCfg, sizeof(DEV_GEN_CFG));
 				break;
+			case DEVID_MSM5232:
+			{
+				MSM5232_CFG okiCfg;
+
+				okiCfg._genCfg = devCfg;
+				// default value for now
+				okiCfg.capacitors[0] = (double)(1e-6);
+				okiCfg.capacitors[1] = (double)(1e-6);
+				okiCfg.capacitors[2] = (double)(1e-6);
+				okiCfg.capacitors[3] = (double)(1e-6);
+				okiCfg.capacitors[4] = (double)(1e-6);
+				okiCfg.capacitors[5] = (double)(1e-6);
+				okiCfg.capacitors[6] = (double)(1e-6);
+				okiCfg.capacitors[7] = (double)(1e-6);
+				SaveDeviceConfig(sdCfg.cfgData, &okiCfg, sizeof(MSM5232_CFG));
+				break;
+			}
 			default:
 				SaveDeviceConfig(sdCfg.cfgData, &devCfg, sizeof(DEV_GEN_CFG));
 				break;

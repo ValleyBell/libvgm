@@ -17,7 +17,7 @@
 
     (NB: Should different memory regions per channel be needed, the bankswitching function can set this up).
 
-  Chanelog, Nicola, August 1999:
+  Changelog, Nicola, August 1999:
     Added Support for the k007232_VOL() macro.
     Added external port callback, and functions to set the volume of the channels
 */

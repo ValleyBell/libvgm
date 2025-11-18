@@ -259,17 +259,16 @@ static void c140_w(void *chip, UINT16 offset, UINT8 data)
 			}
 		}
 	}
-	else if (offset == 0x1fa)
+	else if (offset == 0x1fa)	// set INT1 timer
 	{
 		//info->int1_callback(CLEAR_LINE);
 
 		// timing not verified
-		//unsigned div = info->REG[0x1f8] != 0 ? info->REG[0x1f8] : 256;
-		//attotime interval = attotime::from_ticks(div * 2, info->baserate);
+		//attotime interval = attotime::from_ticks((info->REG[0x1f8] + 1) * 2, info->baserate);
 		//if (info->REG[0x1fe] & 0x01)
 		//	info->int1_timer->adjust(interval);
 	}
-	else if (offset == 0x1fe)
+	else if (offset == 0x1fe)	// enable INT1 timer
 	{
 		if (data & 0x01)
 		{

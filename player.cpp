@@ -1007,12 +1007,13 @@ static void StripNewline(char* str)
 
 static std::string FCC2Str(UINT32 fcc)
 {
-	std::string result(4, '\0');
+	char result[5];
 	result[0] = (char)((fcc >> 24) & 0xFF);
 	result[1] = (char)((fcc >> 16) & 0xFF);
 	result[2] = (char)((fcc >>  8) & 0xFF);
 	result[3] = (char)((fcc >>  0) & 0xFF);
-	return result;
+	result[4] = '\0';
+	return std::string(result);
 }
 
 static UINT8 *SlurpFile(const char *fileName, UINT32 *fileSize)
