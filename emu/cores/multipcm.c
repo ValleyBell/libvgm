@@ -315,7 +315,7 @@ static void update_step(MultiPCM *ptChip, slot_t *slot)
 	{
 		pitch <<= oct;
 	}
-	slot->step = pitch / ptChip->rate;
+	slot->step = (UINT32)(pitch / ptChip->rate);
 }
 
 static void envelope_generator_init(MultiPCM *ptChip, const double rates[64], double attack_decay_ratio)
@@ -324,8 +324,8 @@ static void envelope_generator_init(MultiPCM *ptChip, const double rates[64], do
 	for (i = 4; i < 0x40; ++i)
 	{
 		// Times are based on 44100Hz clock, adjust to real chip clock
-		ptChip->attack_step[i] = (float)(0x400 << EG_SHIFT) / (float)(rates[i] * 44100.0 / 1000.0);
-		ptChip->decay_release_step[i] = (float)(0x400 << EG_SHIFT) / (float)(rates[i] * attack_decay_ratio * 44100.0 / 1000.0);
+		ptChip->attack_step[i] = (UINT32)((0x400 << EG_SHIFT) / (float)(rates[i] * 44100.0 / 1000.0));
+		ptChip->decay_release_step[i] = (UINT32)((0x400 << EG_SHIFT) / (float)(rates[i] * attack_decay_ratio * 44100.0 / 1000.0));
 	}
 	ptChip->attack_step[0] = ptChip->attack_step[1] = ptChip->attack_step[2] = ptChip->attack_step[3] = 0;
 	ptChip->attack_step[0x3f] = 0x400 << EG_SHIFT;
@@ -670,8 +670,8 @@ static UINT8 device_start_multipcm(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 	envelope_generator_init(ptChip, BASE_TIMES, 14.32833);
 
 	// Total level interpolation steps
-	ptChip->total_level_steps[0] = -(float)(0x80 << TL_SHIFT) / (78.2f * 44100.0f / 1000.0f); // lower
-	ptChip->total_level_steps[1] = (float)(0x80 << TL_SHIFT) / (78.2f * 2 * 44100.0f / 1000.0f); // raise
+	ptChip->total_level_steps[0] = -(INT32)((0x80 << TL_SHIFT) / (78.2f * 44100.0f / 1000.0f)); // lower
+	ptChip->total_level_steps[1] = (INT32)((0x80 << TL_SHIFT) / (78.2f * 2 * 44100.0f / 1000.0f)); // raise
 
 	multipcm_set_mute_mask(ptChip, 0x00);
 
@@ -870,16 +870,17 @@ static void MultiPCM_update(void *info, UINT32 samples, DEV_SMPL **outputs)
 				}
 
 				slot->offset += step;
+
+				if (spos ^ (slot->offset >> TL_SHIFT))
+				{
+					slot->prev_sample = csample;
+				}
+
 				if (slot->offset >= (slot->sample.end << TL_SHIFT))
 				{
 					slot->offset -= (slot->sample.end - slot->sample.loop) << TL_SHIFT;
 					// DD-9 expects the looped silence at the end of some samples to be the same whether reversed or not
 					slot->reverse = false;
-				}
-
-				if (spos ^ (slot->offset >> TL_SHIFT))
-				{
-					slot->prev_sample = csample;
 				}
 
 				if ((slot->total_level >> TL_SHIFT) != slot->dest_total_level)

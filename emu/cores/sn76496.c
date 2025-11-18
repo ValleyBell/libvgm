@@ -209,7 +209,7 @@ struct _sn76496_state
 	UINT8 stereo;           // whether we're dealing with stereo or not
 	UINT32 clock_divider;   // clock divider
 	UINT8 ncr_style_psg;    // flag to ignore writes to regs 1,3,5,6,7 with bit 7 low
-	UINT8 sega_style_psg;   // flag to make frequency zero acts as if it is one more than max (0x3ff+1) or if it acts like 0; the initial register is pointing to 0x3 instead of 0x0; the volume reg is preloaded with 0xF instead of 0x0
+	UINT8 sega_style_psg;   // set to false to make frequency zero acts as if it is one more than max (0x3ff+1)
 	
 	INT32 vol_table[16];    // volume table (for 4-bit to db conversion)
 	UINT16 Register[8];     // registers
@@ -258,13 +258,15 @@ static void sn76496_write_reg(void *chip, UINT8 offset, UINT8 data)
 	{
 		r = (data & 0x70) >> 4;
 		R->last_register = r;
-		if (((R->ncr_style_psg) && (r == 6)) && ((data&0x04) != (R->Register[6]&0x04))) R->RNG = R->feedback_mask; // NCR-style PSG resets the LFSR only on a mode write which actually changes the state of bit 2 of register 6
+		if (((R->ncr_style_psg) && (r == 6)) && ((data&0x04) != (R->Register[6]&0x04)))
+			R->RNG = R->feedback_mask; // NCR-style PSG resets the LFSR only on a mode write which actually changes the state of bit 2 of register 6
 		R->Register[r] = (R->Register[r] & 0x3f0) | (data & 0x0f);
 	}
 	else
 	{
 		r = R->last_register;
-		//if ((R->ncr_style_psg) && ((r & 1) || (r == 6))) return; // NCR-style PSG ignores writes to regs 1, 3, 5, 6 and 7 with bit 7 clear; this behavior is not verified on hardware yet, uncomment it once verified.
+		//if ((R->ncr_style_psg) && ((r & 1) || (r == 6)))
+		//	return; // NCR-style PSG ignores writes to regs 1, 3, 5, 6 and 7 with bit 7 clear; this behavior is not verified on hardware yet, uncomment it once verified.
 	}
 
 	c = r >> 1;
@@ -273,14 +275,18 @@ static void sn76496_write_reg(void *chip, UINT8 offset, UINT8 data)
 		case 0: // tone 0: frequency
 		case 2: // tone 1: frequency
 		case 4: // tone 2: frequency
-			if ((data & 0x80) == 0) R->Register[r] = (R->Register[r] & 0x0f) | ((data & 0x3f) << 4);
-			if ((R->Register[r] != 0) || (R->sega_style_psg != 0)) R->period[c] = R->Register[r];
-			else R->period[c] = 0x400;
+			if ((data & 0x80) == 0)
+				R->Register[r] = (R->Register[r] & 0x0f) | ((data & 0x3f) << 4);
+			if ((R->Register[r] != 0) || (R->sega_style_psg != 0))
+				R->period[c] = R->Register[r];
+			else
+				R->period[c] = 0x400;
 
 			if (r == 4)
 			{
 				// update noise shift frequency
-				if ((R->Register[6] & 0x03) == 0x03) R->period[3] = R->period[2]<<1;
+				if ((R->Register[6] & 0x03) == 0x03)
+					R->period[3] = R->period[2] << 1;
 			}
 			break;
 		case 1: // tone 0: volume
@@ -288,16 +294,20 @@ static void sn76496_write_reg(void *chip, UINT8 offset, UINT8 data)
 		case 5: // tone 2: volume
 		case 7: // noise: volume
 			R->volume[c] = R->vol_table[data & 0x0f];
-			if ((data & 0x80) == 0) R->Register[r] = (R->Register[r] & 0x3f0) | (data & 0x0f);
+			if ((data & 0x80) == 0)
+				R->Register[r] = (R->Register[r] & 0x3f0) | (data & 0x0f);
 			break;
 		case 6: // noise: frequency, mode
 			{
-				//if ((data & 0x80) == 0) emu_logf(&R->logger, DEVLOG_DEBUG, "write to reg 6 with bit 7 clear; data was %03x, new write is %02x! report this to LN!\n", R->Register[6], data);
-				if ((data & 0x80) == 0) R->Register[r] = (R->Register[r] & 0x3f0) | (data & 0x0f);
-				n = R->Register[6]&3;
+				//if ((data & 0x80) == 0)
+				//	emu_logf(&R->logger, DEVLOG_DEBUG, "write to reg 6 with bit 7 clear; data was %03x, new write is %02x! report this to LN!\n", R->Register[6], data);
+				if ((data & 0x80) == 0)
+					R->Register[r] = (R->Register[r] & 0x3f0) | (data & 0x0f);
+				n = R->Register[6] & 3;
 				// N/512,N/1024,N/2048,Tone #3 output
-				R->period[3] = (n == 3) ? (R->period[2]<<1) : (2 << (4+n));
-				if (!(R->ncr_style_psg)) R->RNG = R->feedback_mask;
+				R->period[3] = (n == 3) ? (R->period[2] << 1) : (1 << (5 + n));
+				if (!R->ncr_style_psg)
+					R->RNG = R->feedback_mask;
 			}
 			break;
 	}
@@ -371,7 +381,7 @@ static void sn76496_update(void* param, UINT32 samples, DEV_SMPL** outputs)
 	//	}
 	//	else // ready for new divided clock, make a new sample
 	//	{
-	//		R->current_clock = R->clock_divider-1;
+	//		R->current_clock = R->clock_divider - 1;
 			// decrement Cycles to READY by one
 			countdown_cycles(R);
 
@@ -393,7 +403,7 @@ static void sn76496_update(void* param, UINT32 samples, DEV_SMPL** outputs)
 				// if noisemode is 1, both taps are enabled
 				// if noisemode is 0, the lower tap, whitenoisetap2, is held at 0
 				// The != was a bit-XOR (^) before
-				if (((R->RNG & R->whitenoise_tap1)!=0) != (((R->RNG & R->whitenoise_tap2)!=(R->ncr_style_psg?R->whitenoise_tap2:0)) && in_noise_mode(R)))
+				if (((R->RNG & R->whitenoise_tap1) != 0) != (((R->RNG & R->whitenoise_tap2) != (R->ncr_style_psg ? R->whitenoise_tap2 : 0)) && in_noise_mode(R)))
 				{
 					R->RNG >>= 1;
 					R->RNG |= R->feedback_mask;
@@ -411,22 +421,22 @@ static void sn76496_update(void* param, UINT32 samples, DEV_SMPL** outputs)
 #if 0
 		if (R->stereo)
 		{
-			out = ((((R->stereo_mask & 0x10)!=0) && (R->output[0]!=0))? R->volume[0] : 0)
-				+ ((((R->stereo_mask & 0x20)!=0) && (R->output[1]!=0))? R->volume[1] : 0)
-				+ ((((R->stereo_mask & 0x40)!=0) && (R->output[2]!=0))? R->volume[2] : 0)
-				+ ((((R->stereo_mask & 0x80)!=0) && (R->output[3]!=0))? R->volume[3] : 0);
+			out = ((((R->stereo_mask & 0x10) != 0) && (R->output[0] != 0)) ? R->volume[0] : 0) +
+				  ((((R->stereo_mask & 0x20) != 0) && (R->output[1] != 0)) ? R->volume[1] : 0) +
+				  ((((R->stereo_mask & 0x40) != 0) && (R->output[2] != 0)) ? R->volume[2] : 0) +
+				  ((((R->stereo_mask & 0x80) != 0) && (R->output[3] != 0)) ? R->volume[3] : 0);
 
-			out2= ((((R->stereo_mask & 0x1)!=0) && (R->output[0]!=0))? R->volume[0] : 0)
-				+ ((((R->stereo_mask & 0x2)!=0) && (R->output[1]!=0))? R->volume[1] : 0)
-				+ ((((R->stereo_mask & 0x4)!=0) && (R->output[2]!=0))? R->volume[2] : 0)
-				+ ((((R->stereo_mask & 0x8)!=0) && (R->output[3]!=0))? R->volume[3] : 0);
+			out2 = ((((R->stereo_mask & 0x1) !=0 ) && (R->output[0] != 0)) ? R->volume[0] : 0) +
+				   ((((R->stereo_mask & 0x2) !=0 ) && (R->output[1] != 0)) ? R->volume[1] : 0) +
+				   ((((R->stereo_mask & 0x4) !=0 ) && (R->output[2] != 0)) ? R->volume[2] : 0) +
+				   ((((R->stereo_mask & 0x8) !=0 ) && (R->output[3] != 0)) ? R->volume[3] : 0);
 		}
 		else
 		{
-			out= ((R->output[0]!=0)? R->volume[0]:0)
-				+((R->output[1]!=0)? R->volume[1]:0)
-				+((R->output[2]!=0)? R->volume[2]:0)
-				+((R->output[3]!=0)? R->volume[3]:0);
+			out = ((R->output[0] != 0) ? R->volume[0] > 0) +
+				  ((R->output[1] != 0) ? R->volume[1] > 0) +
+				  ((R->output[2] != 0) ? R->volume[2] > 0) +
+				  ((R->output[3] != 0) ? R->volume[3] > 0);
 			out2 = out;
 		}
 #endif
@@ -567,7 +577,7 @@ static void sn76496_reset(void *chip)
 	
 	for (i = 0; i < 4; i++) R->volume[i] = 0;
 
-	R->last_register = R->sega_style_psg?3:0; // Sega VDP PSG defaults to selected period reg for 2nd channel
+	R->last_register = R->sega_style_psg ? 3 : 0; // Sega VDP PSG defaults to selected period reg for 2nd channel
 	for (i = 0; i < 8; i+=2)
 	{
 		R->Register[i] = 0;
@@ -577,6 +587,8 @@ static void sn76496_reset(void *chip)
 	for (i = 0; i < 4; i++)
 	{
 		R->output[i] = 0;
+		// Note: On the real chip with sega_style_psg == false, the frequency is initialized with 0x400.
+		// We don't do this here to avoid bad audio glitches at startup.
 		R->period[i] = 0;
 		R->count[i] = 0;
 	}
@@ -586,7 +598,7 @@ static void sn76496_reset(void *chip)
 
 	R->cycles_to_ready = 1;          // assume ready is not active immediately on init. is this correct?
 	R->stereo_mask = 0xFF;           // all channels enabled
-	//R->current_clock = R->clock_divider-1;
+	//R->current_clock = R->clock_divider - 1;
 
 	R->ready_state = 1;
 
@@ -656,7 +668,7 @@ static UINT8 device_start_sn76496_mame(const SN76496_CFG* cfg, DEV_INFO* retDevI
 	chip->negate = cfg->negate;             // channel negation
 	chip->stereo = cfg->stereo;             // GameGear stereo
 	chip->ncr_style_psg = cfg->ncrPSG;      // NCR mode
-	chip->sega_style_psg = cfg->segaPSG;    // frequency set to 0 results in freq = 0x400 rather than 0
+	chip->sega_style_psg = cfg->segaPSG;    // frequency set to 0 results in freq = 1, (false: results in freq = 0x400)
 	chip->NgpFlags = 0x00;
 	chip->NgpChip2 = NULL;
 	rate = chip->clock / 2 / chip->clock_divider;

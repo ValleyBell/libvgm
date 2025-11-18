@@ -59,6 +59,7 @@ static UINT16 SCSP_r16(void* info, UINT16 addr);
 // MIDI I/O access (used for comms on Model 2/3)
 static void scsp_midi_in(void* info, UINT8 offset, UINT8 data);
 static UINT8 scsp_midi_out_r(void* info, UINT8 offset);
+static void scsp_midi_out_w(void* info, UINT8 data);
 
 static void scsp_write_ram(void* info, UINT32 offset, UINT32 length, const UINT8* data);
 static void scsp_set_mute_mask(void* info, UINT32 MuteMask);
@@ -301,6 +302,7 @@ struct _scsp_state
 	//UINT32 IrqTimBC;
 	//UINT32 IrqMidi;
 
+	UINT8 MidiOutStack[32];
 	UINT8 MidiOutW, MidiOutR;
 	UINT8 MidiStack[32];
 	UINT8 MidiW, MidiR;
@@ -678,7 +680,7 @@ INLINE void SCSP_UpdateReg(scsp_state *scsp, /*address_space &space,*/ int reg)
 			break;
 		case 0x6:
 		case 0x7:
-			scsp_midi_in(scsp, 0, scsp->udata.data[0x6/2]&0xff);
+			scsp_midi_out_w(scsp, scsp->udata.data[0x6/2]&0xff);
 			break;
 		case 8:
 		case 9:
@@ -763,12 +765,16 @@ static void SCSP_UpdateRegR(scsp_state *scsp, int reg)
 				unsigned short v=scsp->udata.data[0x5/2];
 				v&=0xff00;
 				v|=scsp->MidiStack[scsp->MidiR];
-				//scsp->irq_cb(scsp->IrqMidi, CLEAR_LINE);   // cancel the IRQ
 				//logerror("Read %x from SCSP MIDI\n", v);
 				if(scsp->MidiR!=scsp->MidiW)
 				{
 					++scsp->MidiR;
 					scsp->MidiR&=31;
+				}
+				if (scsp->MidiR == scsp->MidiW)		// if the input FIFO is empty, clear the IRQ
+				{
+					//m_irq_cb(scsp->IrqMidi, CLEAR_LINE);
+					scsp->udata.data[0x20 / 2] &= ~8;
 				}
 				scsp->udata.data[0x4/2]=v;
 			}
@@ -1287,7 +1293,7 @@ static void scsp_midi_in(void* info, UINT8 offset, UINT8 data)
 
 //	printf("scsp_midi_in: %02x\n", data);
 
-	scsp->MidiStack[scsp->MidiW++]=data;
+	scsp->MidiStack[scsp->MidiW++] = data;
 	scsp->MidiW &= 31;
 
 	//CheckPendingIRQ(scsp);
@@ -1298,9 +1304,19 @@ static UINT8 scsp_midi_out_r(void* info, UINT8 offset)
 	scsp_state *scsp = (scsp_state *)info;
 	UINT8 val;
 
-	val=scsp->MidiStack[scsp->MidiR++];
-	scsp->MidiR&=31;
+	val = scsp->MidiOutStack[scsp->MidiOutR++];
+	scsp->MidiOutR &= 31;
 	return val;
+}
+ 
+static void scsp_midi_out_w(void* info, UINT8 data)
+{
+	scsp_state *scsp = (scsp_state *)info;
+
+	scsp->MidiOutStack[scsp->MidiOutW++] = data;
+	scsp->MidiOutW &= 31;
+
+	//CheckPendingIRQ(scsp);
 }
 
 

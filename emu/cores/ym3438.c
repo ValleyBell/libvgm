@@ -1553,8 +1553,8 @@ void NOPN2_GenerateResampled(ym3438_t *chip, Bit32s *buf)
         }
         else
         {
-            chip->samples[0] = chip->oldsamples[0] + FILTER_CUTOFF_I * (chip->samples[0]*(11+1) - chip->oldsamples[0]);
-            chip->samples[1] = chip->oldsamples[1] + FILTER_CUTOFF_I * (chip->samples[1]*(11+1) - chip->oldsamples[1]);
+            chip->samples[0] = chip->oldsamples[0] + (Bit32s)(FILTER_CUTOFF_I * (chip->samples[0]*(11+1) - chip->oldsamples[0]));
+            chip->samples[1] = chip->oldsamples[1] + (Bit32s)(FILTER_CUTOFF_I * (chip->samples[1]*(11+1) - chip->oldsamples[1]));
         }
         chip->samplecnt -= chip->rateratio;
     }

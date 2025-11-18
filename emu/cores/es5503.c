@@ -36,6 +36,7 @@
   2.1.3 (RB) - Fixed oscillator enable register off-by-1 which caused everything to be half a step sharp.
   2.2 (RB) - More precise one-shot even/swap odd behavior from hardware observations with Ian Brumby's SWAPTEST.
   2.3 (RB) - Sync & AM modes added, emulate the volume glitch for the highest-numbered enabled oscillator.
+  2.3.1 (RB) - Fixed thinko in the volume glitch emulation and minor cleanup.
 */
 
 #include <stdlib.h>
