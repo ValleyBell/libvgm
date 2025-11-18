@@ -54,6 +54,7 @@
 #define SNDDEV_K005289
 #define SNDDEV_MSM5205
 #define SNDDEV_MSM5232
+#define SNDDEV_BSMT2000
 #endif
 
 #ifdef SNDDEV_SN76496
@@ -181,6 +182,9 @@
 #endif
 #ifdef SNDDEV_MSM5232
 #include "cores/msm5232.h"
+#endif
+#ifdef SNDDEV_BSMT2000
+#include "cores/bsmt2000.h"
 #endif
 
 const DEV_DECL* sndEmu_Devices[] = {
@@ -321,6 +325,9 @@ const DEV_DECL* sndEmu_Devices[] = {
 #endif
 #ifdef SNDDEV_MSM5232
 	&sndDev_MSM5232,
+#endif
+#ifdef SNDDEV_BSMT2000
+	&sndDev_BSMT2000,
 #endif
 	NULL	// list end
 };
