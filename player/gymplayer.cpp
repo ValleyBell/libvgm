@@ -212,7 +212,7 @@ void GYMPlayer::CalcSongLength(void)
 			filePos += 0x01;
 			break;
 		default:
-			fileEnd = true;
+			// just ignore unknown commands
 			break;
 		}
 	}
@@ -1013,6 +1013,9 @@ void GYMPlayer::DoCommand(void)
 			
 			cDev->write(dataPtr, SN76496_W_REG, data);
 		}
+		return;
+	default:
+		emu_logf(&_logger, PLRLOG_WARN, "Unknown GYM command %02X found! (filePos 0x%06X)\n", curCmd, _filePos - 0x01);
 		return;
 	}
 	
