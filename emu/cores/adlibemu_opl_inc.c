@@ -834,9 +834,15 @@ static void adlib_write(void *chip, Bit16u idx, Bit8u val)
 		int num = idx&7;
 		Bitu base = (idx-ARC_TVS_KSR_MUL)&0xff;
 		if ((num<6) && (base<22)) {
+#if defined(OPLTYPE_IS_OPL3)
 			Bitu modop = regbase2modop[second_set?(base+22):base];
 			Bitu regbase = base+second_set;
 			Bitu chanbase = second_set?(modop-18+ARC_SECONDSET):modop;
+#else
+			Bitu modop = regbase2modop[base];
+			Bitu regbase = base;
+			Bitu chanbase = modop;
+#endif
 
 			// change tremolo/vibrato and sustain keeping of this operator
 			op_type* op_ptr = &OPL->op[modop+((num<3) ? 0 : 9)];
@@ -869,8 +875,13 @@ static void adlib_write(void *chip, Bit16u idx, Bit8u val)
 		Bitu base = (idx-ARC_KSL_OUTLEV)&0xff;
 		if ((num<6) && (base<22))
 		{
+#if defined(OPLTYPE_IS_OPL3)
 			Bitu modop = regbase2modop[second_set?(base+22):base];
 			Bitu chanbase = second_set?(modop-18+ARC_SECONDSET):modop;
+#else
+			Bitu modop = regbase2modop[base];
+			Bitu chanbase = modop;
+#endif
 
 			// change frequency calculations of this operator as
 			// key scale level and output rate can be changed

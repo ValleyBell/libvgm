@@ -32,12 +32,12 @@ extern "C" int __cdecl _kbhit(void);
 #include "utils/DataLoader.h"
 #include "utils/FileLoader.h"
 #include "utils/MemoryLoader.h"
-#include "player/playerbase.hpp"
-#include "player/s98player.hpp"
-#include "player/droplayer.hpp"
-#include "player/vgmplayer.hpp"
-#include "player/gymplayer.hpp"
-#include "player/playera.hpp"
+#include "player-c/engine_base.h"
+//#include "player/s98player.hpp"
+#include "player-c/engine_dro.h"
+//#include "player/vgmplayer.hpp"
+#include "player-c/engine_gym.h"
+#include "player-c/playera.h"
 #include "audio/AudioStream.h"
 #include "audio/AudioStream_SpcDrvFuns.h"
 #include "emu/SoundDevs.h"	// for DEVID_*
@@ -47,16 +47,18 @@ extern "C" int __cdecl _kbhit(void);
 //#define USE_MEMORY_LOADER 1	// define to use the in-memory loader
 
 int main(int argc, char* argv[]);
-static void DoChipControlMode(PlayerBase* player);
+static void DoChipControlMode(PEBASE* plrEn);
 static void StripNewline(char* str);
 static std::string FCC2Str(UINT32 fcc);
+#ifdef USE_MEMORY_LOADER
 static UINT8 *SlurpFile(const char *fileName, UINT32 *fileSize);
+#endif
 static const char* GetFileTitle(const char* filePath);
 static UINT32 FillBuffer(void* drvStruct, void* userParam, UINT32 bufSize, void* Data);
-static UINT8 FilePlayCallback(PlayerBase* player, void* userParam, UINT8 evtType, void* evtParam);
-static DATA_LOADER* RequestFileCallback(void* userParam, PlayerBase* player, const char* fileName);
+static UINT8 FilePlayCallback(PEBASE* plrEn, void* userParam, UINT8 evtType, void* evtParam);
+static DATA_LOADER* RequestFileCallback(void* userParam, PEBASE* plrEn, const char* fileName);
 static const char* LogLevel2Str(UINT8 level);
-static void PlayerLogCallback(void* userParam, PlayerBase* player, UINT8 level, UINT8 srcType,
+static void PlayerLogCallback(void* userParam, PEBASE* plrEn, UINT8 level, UINT8 srcType,
 	const char* srcTag, const char* message);
 static UINT32 GetNthAudioDriver(UINT8 adrvType, INT32 drvNumber);
 static UINT8 InitAudioSystem(void);
@@ -96,7 +98,7 @@ static bool showFileInfo = false;
 static UINT8 logLevel = DEVLOG_INFO;
 static UINT8 pbTimeMode = PLAYTIME_LOOP_INCL | PLAYTIME_TIME_FILE;
 
-static PlayerA mainPlr;
+static PLAYERA* mainPlr;
 
 int main(int argc, char* argv[])
 {
@@ -116,6 +118,7 @@ int main(int argc, char* argv[])
 	SetConsoleOutputCP(65001);	// set UTF-8 codepage
 #endif
 	
+	mainPlr = PlayerA_Create();
 	retVal = InitAudioSystem();
 	if (retVal)
 		return 1;
@@ -129,22 +132,22 @@ int main(int argc, char* argv[])
 	
 	// I'll keep the instances of the players for the program's life time.
 	// This way player/chip options are kept between track changes.
-	mainPlr.RegisterPlayerEngine(new VGMPlayer);
-	mainPlr.RegisterPlayerEngine(new S98Player);
-	mainPlr.RegisterPlayerEngine(new DROPlayer);
-	mainPlr.RegisterPlayerEngine(new GYMPlayer);
-	mainPlr.SetEventCallback(FilePlayCallback, NULL);
-	mainPlr.SetFileReqCallback(RequestFileCallback, NULL);
-	mainPlr.SetLogCallback(PlayerLogCallback, NULL);
-	//mainPlr.SetOutputSettings() is done in StartAudioDevice()
+	//PlayerA_RegisterPlayerEngine(mainPlr, new VGMPlayer);
+	//PlayerA_RegisterPlayerEngine(mainPlr, new S98Player);
+	PlayerA_RegisterPlayerEngine(mainPlr, (PEBASE*)DROEngine_Create());
+	PlayerA_RegisterPlayerEngine(mainPlr, (PEBASE*)GYMEngine_Create());
+	PlayerA_SetEventCallback(mainPlr, FilePlayCallback, NULL);
+	PlayerA_SetFileReqCallback(mainPlr, RequestFileCallback, NULL);
+	PlayerA_SetLogCallback(mainPlr, PlayerLogCallback, NULL);
+	//PlayerA_SetOutputSettings(mainPlr) was already done in StartAudioDevice()
 	{
-		PlayerA::Config pCfg = mainPlr.GetConfiguration();
+		PLAYER_CFG pCfg = *PlayerA_GetConfiguration(mainPlr);
 		pCfg.masterVol = masterVol;
 		pCfg.loopCount = maxLoops;
 		pCfg.fadeSmpls = sampleRate * 4;	// fade over 4 seconds
 		pCfg.endSilenceSmpls = sampleRate / 2;	// 0.5 seconds of silence at the end
 		pCfg.pbSpeed = 1.0;
-		mainPlr.SetConfiguration(pCfg);
+		PlayerA_SetConfiguration(mainPlr, &pCfg);
 	}
 
 	for (curSong = argbase; curSong < argc; curSong ++)
@@ -170,7 +173,7 @@ int main(int argc, char* argv[])
 		fprintf(stderr, "Error 0x%02X loading file!\n", retVal);
 		continue;
 	}
-	retVal = mainPlr.LoadFile(dLoad);
+	retVal = PlayerA_LoadFile(mainPlr, dLoad);
 	if (retVal)
 	{
 		DataLoader_Deinit(dLoad);
@@ -178,30 +181,33 @@ int main(int argc, char* argv[])
 		continue;
 	}
 	
-	PlayerBase* player = mainPlr.GetPlayer();
-	mainPlr.SetLoopCount(maxLoops);
-	if (player->GetPlayerType() == FCC_S98)
+	PEBASE* plrEn = PlayerA_GetPlayer(mainPlr);
+	PlayerA_SetLoopCount(mainPlr, maxLoops);
+#if 0
+	if (plrEn->vtbl.playerType == FCC_S98)
 	{
-		S98Player* s98play = dynamic_cast<S98Player*>(player);
+		PE_S98* s98play = (PE_S98*)player;
 		const S98_HEADER* s98hdr = s98play->GetFileHeader();
 		
 		printf("S98 v%u, Total Length: %.2f s, Loop Length: %.2f s, Tick Rate: %u/%u", s98hdr->fileVer,
-				player->Tick2Second(player->GetTotalTicks()), player->Tick2Second(player->GetLoopTicks()),
+				plrEn->vtbl.Tick2Second(plrEn, plrEn->vtbl.GetTotalTicks(plrEn)), plrEn->vtbl.Tick2Second(plrEn, plrEn->vtbl.GetLoopTicks(plrEn)),
 				s98hdr->tickMult, s98hdr->tickDiv);
 	}
-	else if (player->GetPlayerType() == FCC_VGM)
+	else if (plrEn->vtbl.playerType == FCC_VGM)
 	{
-		VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(player);
+		PE_VGM* vgmplay = (PE_VGM*)player;
 		const VGM_HEADER* vgmhdr = vgmplay->GetFileHeader();
 		
 		printf("VGM v%3X, Total Length: %.2f s, Loop Length: %.2f s", vgmhdr->fileVer,
-				player->Tick2Second(player->GetTotalTicks()), player->Tick2Second(player->GetLoopTicks()));
-		mainPlr.SetLoopCount(vgmplay->GetModifiedLoopCount(maxLoops));
+				plrEn->vtbl.Tick2Second(plrEn, plrEn->vtbl.GetTotalTicks(plrEn)), plrEn->vtbl.Tick2Second(plrEn, plrEn->vtbl.GetLoopTicks(plrEn)));
+		PlayerA_SetLoopCount(mainPlr, vgmplay->GetModifiedLoopCount(maxLoops));
 	}
-	else if (player->GetPlayerType() == FCC_DRO)
+	else
+#endif
+		if (plrEn->vtbl.playerType == FCC_DRO)
 	{
-		DROPlayer* droplay = dynamic_cast<DROPlayer*>(player);
-		const DRO_HEADER* drohdr = droplay->GetFileHeader();
+		PE_DRO* droplay = (PE_DRO*)plrEn;
+		const DRO_HEADER* drohdr = DROEngine_GetFileHeader(droplay);
 		const char* hwType;
 		
 		if (drohdr->hwType == 0)
@@ -213,7 +219,7 @@ int main(int argc, char* argv[])
 		else
 			hwType = "unknown";
 		printf("DRO v%u, Total Length: %.2f s, HW Type: %s", drohdr->verMajor,
-				player->Tick2Second(player->GetTotalTicks()), hwType);
+				plrEn->vtbl.Tick2Second(plrEn, plrEn->vtbl.GetTotalTicks(plrEn)), hwType);
 	}
 	
 	if (showTags > 0)
@@ -225,7 +231,7 @@ int main(int argc, char* argv[])
 		const char* songDate = NULL;
 		const char* songComment = NULL;
 	
-		const char* const* tagList = player->GetTags();
+		const char* const* tagList = plrEn->vtbl.GetTags(plrEn);
 		for (const char* const* t = tagList; *t; t += 2)
 		{
 			if (!strcmp(t[0], "TITLE"))
@@ -266,61 +272,62 @@ int main(int argc, char* argv[])
 		UINT32 devOptID;
 		
 		devOptID = PLR_DEV_ID(DEVID_SN76496, 0);
-		retVal = player->GetDeviceOptions(devOptID, devOpts);
+		retVal = plrEn->vtbl.GetDeviceOptions(plrEn, devOptID, &devOpts);
 		if (! (retVal & 0x80))
 		{
 			static const INT16 panPos[4] = {0x00, -0x80, +0x80, 0x00};
 			if (! devOpts.emuCore[0])
 				devOpts.emuCore[0] = FCC_MAXM;
 			memcpy(devOpts.panOpts.chnPan, panPos, sizeof(panPos));
-			player->SetDeviceOptions(devOptID, devOpts);
+			plrEn->vtbl.SetDeviceOptions(plrEn, devOptID, &devOpts);
 		}
 		
 		devOptID = PLR_DEV_ID(DEVID_YM2413, 0);
-		retVal = player->GetDeviceOptions(devOptID, devOpts);
+		retVal = plrEn->vtbl.GetDeviceOptions(plrEn, devOptID, &devOpts);
 		if (! (retVal & 0x80))
 		{
 			static const INT16 panPos[14] = {
 				-0x100, +0x100, -0x80, +0x80, -0x40, +0x40, -0xC0, +0xC0, 0x00,
 				-0x60, +0x60, 0x00, -0xC0, +0xC0};
 			memcpy(devOpts.panOpts.chnPan, panPos, sizeof(panPos));
-			player->SetDeviceOptions(devOptID, devOpts);
+			plrEn->vtbl.SetDeviceOptions(plrEn, devOptID, &devOpts);
 		}
 		
 		devOptID = PLR_DEV_ID(DEVID_AY8910, 0);
-		retVal = player->GetDeviceOptions(devOptID, devOpts);
+		retVal = plrEn->vtbl.GetDeviceOptions(plrEn, devOptID, &devOpts);
 		if (! (retVal & 0x80))
 		{
 			static const INT16 panPos[3] = {-0x80, +0x80, 0x00};
 			memcpy(devOpts.panOpts.chnPan, panPos, sizeof(panPos));
-			player->SetDeviceOptions(devOptID, devOpts);
+			plrEn->vtbl.SetDeviceOptions(plrEn, devOptID, &devOpts);
 		}
 
 		devOptID = PLR_DEV_ID(DEVID_C6280, 0);
-		retVal = player->GetDeviceOptions(devOptID, devOpts);
+		retVal = plrEn->vtbl.GetDeviceOptions(plrEn, devOptID, &devOpts);
 		if (! (retVal & 0x80))
 		{
 			if (! devOpts.emuCore[0])
 				devOpts.emuCore[0] = FCC_MAME;
-			player->SetDeviceOptions(devOptID, devOpts);
+			plrEn->vtbl.SetDeviceOptions(plrEn, devOptID, &devOpts);
 		}
 	}
 	
-	mainPlr.Start();
+	PlayerA_Start(mainPlr);
 	
 	if (showFileInfo)
 	{
-		// only after calling PlayerA::Start() we can obtain info about the currently used sound cores
+		// only after calling PLAYERA::Start() we can obtain info about the currently used sound cores
 		PLR_SONG_INFO sInf;
-		std::vector<PLR_DEV_INFO> diList;
+		size_t diCount;
+		PLR_DEV_INFO* diList;
 		size_t curDev;
 		
-		player->GetSongInfo(sInf);
-		player->GetSongDeviceInfo(diList);
+		plrEn->vtbl.GetSongInfo(plrEn, &sInf);
+		plrEn->vtbl.GetSongDeviceInfo(plrEn, &diCount, &diList);
 		printf("SongInfo: %s v%X.%02X, Rate %u/%u, Len %u, Loop at %d, devices: %u\n",
 			FCC2Str(sInf.format).c_str(), sInf.fileVerMaj, sInf.fileVerMin,
 			sInf.tickRateMul, sInf.tickRateDiv, sInf.songLen, sInf.loopTick, sInf.deviceCnt);
-		for (curDev = 0; curDev < diList.size(); curDev ++)
+		for (curDev = 0; curDev < diCount; curDev ++)
 		{
 			const PLR_DEV_INFO& pdi = diList[curDev];
 			const char* devName = "";
@@ -347,17 +354,19 @@ int main(int argc, char* argv[])
 			}
 		}
 	}
+#if 0
 	const std::vector<VGMPlayer::DACSTRM_DEV>* vgmPcmStrms = NULL;
-	if (player->GetPlayerType() == FCC_VGM)
+	if (plrEn->vtbl.playerType == FCC_VGM)
 	{
-		VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(player);
+		VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(plrEn);
 		vgmPcmStrms = &vgmplay->GetStreamDevInfo();
 	}
+#endif
 	
 	StartDiskWriter("waveOut.wav");
 	
 	if (audDrv != NULL)
-		retVal = AudioDrv_SetCallback(audDrv, FillBuffer, &mainPlr);
+		retVal = AudioDrv_SetCallback(audDrv, FillBuffer, mainPlr);
 	else
 		retVal = 0xFF;
 	manualRenderLoop = (retVal != 0x00);
@@ -376,16 +385,17 @@ int main(int argc, char* argv[])
 			
 			if (playState & PLAYSTATE_PAUSE)
 				pState = "Paused";
-			else if (mainPlr.GetState() & PLAYSTATE_END)
+			else if (PlayerA_GetState(mainPlr) & PLAYSTATE_END)
 				pState = "Finish ";
-			else if (mainPlr.GetState() & PLAYSTATE_FADE)
+			else if (PlayerA_GetState(mainPlr) & PLAYSTATE_FADE)
 				pState = "Fading ";
 			else
 				pState = "Playing";
-			if (vgmPcmStrms == NULL || vgmPcmStrms->empty())
+			//if (vgmPcmStrms == NULL || vgmPcmStrms->empty())
 			{
-				printf("%s %.2f / %.2f ...   \r", pState, mainPlr.GetCurTime(pbTimeMode), mainPlr.GetTotalTime(pbTimeMode));
+				printf("%s %.2f / %.2f ...   \r", pState, PlayerA_GetCurTime(mainPlr, pbTimeMode), PlayerA_GetTotalTime(mainPlr, pbTimeMode));
 			}
+#if 0
 			else
 			{
 				const VGMPlayer::DACSTRM_DEV* strmDev = &(*vgmPcmStrms)[0];
@@ -397,17 +407,18 @@ int main(int argc, char* argv[])
 				if (pbMode.length() == 1)
 					pbMode = "";
 				printf("%s %.2f / %.2f [%02X / %02X at %4.1f KHz%s] ...     \r",
-					pState, mainPlr.GetCurTime(pbTimeMode), mainPlr.GetTotalTime(pbTimeMode),
+					pState, PlayerA_GetCurTime(mainPlr, pbTimeMode), PlayerA_GetTotalTime(mainPlr, pbTimeMode),
 					1 + strmDev->lastItem, strmDev->maxItems, strmDev->freq / 1000.0,
 					pbMode.c_str());
 			}
+#endif
 			fflush(stdout);
 			needRefresh = false;
 		}
 		
 		if (manualRenderLoop && ! (playState & PLAYSTATE_PAUSE))
 		{
-			UINT32 wrtBytes = FillBuffer(audDrvLog, &mainPlr, (UINT32)locAudBuf.size(), &locAudBuf[0]);
+			UINT32 wrtBytes = FillBuffer(audDrvLog, mainPlr, (UINT32)locAudBuf.size(), &locAudBuf[0]);
 			AudioDrv_WriteData(audDrvLog, wrtBytes, &locAudBuf[0]);
 		}
 		else
@@ -434,20 +445,21 @@ int main(int argc, char* argv[])
 			else if (letter == 'R')	// restart
 			{
 				OSMutex_Lock(renderMtx);
-				mainPlr.Reset();
+				PlayerA_Reset(mainPlr);
 				OSMutex_Unlock(renderMtx);
 			}
 			else if (letter >= '0' && letter <= '9')
 			{
+				PEBASE* engine = PlayerA_GetPlayer(mainPlr);
 				UINT32 maxPos;
 				UINT8 pbPos10;
 				UINT32 destPos;
 				
 				OSMutex_Lock(renderMtx);
-				maxPos = mainPlr.GetPlayer()->GetTotalPlayTicks(maxLoops);
+				maxPos = engine->vtbl.GetTotalPlayTicks(engine, maxLoops);
 				pbPos10 = letter - '0';
 				destPos = maxPos * pbPos10 / 10;
-				mainPlr.Seek(PLAYPOS_TICK, destPos);
+				PlayerA_Seek(mainPlr, PLAYPOS_TICK, destPos);
 				OSMutex_Unlock(renderMtx);
 			}
 			else if (letter == 'B')	// previous file
@@ -471,7 +483,7 @@ int main(int argc, char* argv[])
 			else if (letter == 'F')	// fade out
 			{
 				OSMutex_Lock(renderMtx);
-				mainPlr.FadeOut();
+				PlayerA_FadeOut(mainPlr);
 				OSMutex_Unlock(renderMtx);
 			}
 			else if (letter == 'C')	// chip control
@@ -479,7 +491,7 @@ int main(int argc, char* argv[])
 #ifndef _WIN32
 				changemode(0);	// make sure entered charactered are echoed
 #endif
-				DoChipControlMode(mainPlr.GetPlayer());
+				DoChipControlMode(PlayerA_GetPlayer(mainPlr));
 #ifndef _WIN32
 				changemode(1);
 #endif
@@ -497,8 +509,8 @@ int main(int argc, char* argv[])
 	
 	StopDiskWriter();
 	
-	mainPlr.Stop();
-	mainPlr.UnloadFile();
+	PlayerA_Stop(mainPlr);
+	PlayerA_UnloadFile(mainPlr);
 	DataLoader_Deinit(dLoad);	dLoad = NULL;
 #ifdef USE_MEMORY_LOADER
 	free(fileData);
@@ -506,7 +518,8 @@ int main(int argc, char* argv[])
 	
 	}	// end for(curSong)
 	
-	mainPlr.UnregisterAllPlayers();
+	PlayerA_UnregisterAllPlayers(mainPlr);
+	PlayerA_Destroy(mainPlr);	mainPlr = NULL;
 	
 	StopAudioDevice();
 	DeinitAudioSystem();
@@ -559,7 +572,7 @@ Sound Chip ID:
 			-1.0 (left) .. 0.0 (centre) .. +1.0 (right)
 		Q - quit
 */
-static void DoChipControlMode(PlayerBase* player)
+static void DoChipControlMode(PEBASE* plrEn)
 {
 	int letter;
 	int mode;
@@ -577,7 +590,7 @@ static void DoChipControlMode(PlayerBase* player)
 		{
 			PLR_DEV_OPTS devOpts;
 			
-			// number (sound chip ID) / D (display) / P (player options)
+			// number (sound chip ID) / D (display) / P (plrEn options)
 			printf("Sound Chip ID: ");
 			endPtr = fgets(line, 0x80, stdin);
 			if (endPtr == NULL)
@@ -591,7 +604,7 @@ static void DoChipControlMode(PlayerBase* player)
 			chipID = (int)strtoul(line, &endPtr, 0);
 			if (endPtr > line)
 			{
-				retVal = player->GetDeviceOptions((UINT32)chipID, devOpts);
+				retVal = plrEn->vtbl.GetDeviceOptions(plrEn, (UINT32)chipID, &devOpts);
 				if (retVal & 0x80)
 				{
 					printf("Invalid sound chip ID.\n");
@@ -615,23 +628,22 @@ static void DoChipControlMode(PlayerBase* player)
 				}
 				else if (letter == 'P')
 				{
-					switch(player->GetPlayerType())
+					switch(plrEn->vtbl.playerType)
 					{
 					case FCC_DRO:
 					{
-						DROPlayer* droplay = dynamic_cast<DROPlayer*>(player);
 						DRO_PLAY_OPTIONS playOpts;
-						droplay->GetPlayerOptions(playOpts);
+						plrEn->vtbl.GetPlayerOptions(plrEn, &playOpts.genOpts);
 						double spd = playOpts.genOpts.pbSpeed / (double)0x10000;
 						printf("Opts: Speed %.3f, OPL3Mode %u\n", spd, playOpts.v2opl3Mode);
 						mode = 2;
 					}
 						break;
+#if 0
 					case FCC_VGM:
 					{
-						VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(player);
 						VGM_PLAY_OPTIONS playOpts;
-						vgmplay->GetPlayerOptions(playOpts);
+						plrEn->vtbl.GetPlayerOptions(plrEn, &playOpts.genOpts);
 						double spd = playOpts.genOpts.pbSpeed / (double)0x10000;
 						printf("Opts: Speed %.3f, PlaybkHz %u, HardStopOld %u\n",
 							spd, playOpts.playbackHz, playOpts.hardStopOld);
@@ -640,9 +652,8 @@ static void DoChipControlMode(PlayerBase* player)
 						break;
 					case FCC_S98:
 					{
-						S98Player* s98play = dynamic_cast<S98Player*>(player);
 						S98_PLAY_OPTIONS playOpts;
-						s98play->GetPlayerOptions(playOpts);
+						plrEn->vtbl.GetPlayerOptions(plrEn, &playOpts.genOpts);
 						double spd = playOpts.genOpts.pbSpeed / (double)0x10000;
 						printf("Opts: Speed %.3f\n", spd);
 						mode = 2;
@@ -650,13 +661,13 @@ static void DoChipControlMode(PlayerBase* player)
 						break;
 					case FCC_GYM:
 					{
-						GYMPlayer* gymplay = dynamic_cast<GYMPlayer*>(player);
 						GYM_PLAY_OPTIONS playOpts;
-						gymplay->GetPlayerOptions(playOpts);
+						plrEn->vtbl.GetPlayerOptions(plrEn, &playOpts.genOpts);
 						double spd = playOpts.genOpts.pbSpeed / (double)0x10000;
 						printf("Opts: Speed %.3f\n", spd);
 						mode = 2;
 					}
+#endif
 						break;
 					}
 				}
@@ -667,7 +678,7 @@ static void DoChipControlMode(PlayerBase* player)
 			char* tokenStr;
 			PLR_DEV_OPTS devOpts;
 			
-			retVal = player->GetDeviceOptions((UINT32)chipID, devOpts);
+			retVal = plrEn->vtbl.GetDeviceOptions(plrEn, (UINT32)chipID, &devOpts);
 			if (retVal & 0x80)
 			{
 				mode = 0;
@@ -693,7 +704,7 @@ static void DoChipControlMode(PlayerBase* player)
 				devOpts.emuCore[0] =
 					(fccStr[0] << 24) | (fccStr[1] << 16) |
 					(fccStr[2] <<  8) | (fccStr[3] <<  0);
-				player->SetDeviceOptions((UINT32)chipID, devOpts);
+				plrEn->vtbl.SetDeviceOptions(plrEn, (UINT32)chipID, &devOpts);
 			}
 			else if (! strcmp(line, "LC"))
 			{
@@ -702,31 +713,31 @@ static void DoChipControlMode(PlayerBase* player)
 				devOpts.emuCore[1] =
 					(fccStr[0] << 24) | (fccStr[1] << 16) |
 					(fccStr[2] <<  8) | (fccStr[3] <<  0);
-				player->SetDeviceOptions((UINT32)chipID, devOpts);
+				plrEn->vtbl.SetDeviceOptions(plrEn, (UINT32)chipID, &devOpts);
 			}
 			else if (! strcmp(line, "O"))
 			{
 				devOpts.coreOpts = (UINT32)strtoul(tokenStr, &endPtr, 0);
 				if (endPtr > tokenStr)
-					player->SetDeviceOptions((UINT32)chipID, devOpts);
+					plrEn->vtbl.SetDeviceOptions(plrEn, (UINT32)chipID, &devOpts);
 			}
 			else if (! strcmp(line, "SRM"))
 			{
 				devOpts.srMode = (UINT8)strtoul(tokenStr, &endPtr, 0);
 				if (endPtr > tokenStr)
-					player->SetDeviceOptions((UINT32)chipID, devOpts);
+					plrEn->vtbl.SetDeviceOptions(plrEn, (UINT32)chipID, &devOpts);
 			}
 			else if (! strcmp(line, "SR"))
 			{
 				devOpts.smplRate = (UINT32)strtoul(tokenStr, &endPtr, 0);
 				if (endPtr > tokenStr)
-					player->SetDeviceOptions((UINT32)chipID, devOpts);
+					plrEn->vtbl.SetDeviceOptions(plrEn, (UINT32)chipID, &devOpts);
 			}
 			else if (! strcmp(line, "RSM"))
 			{
 				devOpts.resmplMode = (UINT8)strtoul(tokenStr, &endPtr, 0);
 				if (endPtr > tokenStr)
-					player->SetDeviceOptions((UINT32)chipID, devOpts);
+					plrEn->vtbl.SetDeviceOptions(plrEn, (UINT32)chipID, &devOpts);
 			}
 			else if (! strcmp(line, "M"))
 			{
@@ -755,7 +766,7 @@ static void DoChipControlMode(PlayerBase* player)
 					tokenStr = strtok(NULL, ",");
 				}
 				
-				player->SetDeviceMuting((UINT32)chipID, muteOpts);
+				plrEn->vtbl.SetDeviceMuting(plrEn, (UINT32)chipID, &muteOpts);
 				printf("-> Chip %s [0x%02X], Channel Mask: 0x%02X\n",
 					(muteOpts.disable & 0x01) ? "Off" : "On", muteOpts.disable, muteOpts.chnMute[0]);
 			}
@@ -778,7 +789,7 @@ static void DoChipControlMode(PlayerBase* player)
 					chnID ++;
 				}
 				
-				player->SetDeviceOptions((UINT32)chipID, devOpts);
+				plrEn->vtbl.SetDeviceOptions(plrEn, (UINT32)chipID, &devOpts);
 				printf("-> Panning: ");
 				for (curChn = 0; curChn < chnID; curChn ++)
 					printf("%.2f,", panOpts.chnPan[0][chnID] / (float)0x100);
@@ -791,15 +802,14 @@ static void DoChipControlMode(PlayerBase* player)
 		}
 		else if (mode == 2)	// player configuration mode
 		{
-			switch(player->GetPlayerType())
+			switch(plrEn->vtbl.playerType)
 			{
 			case FCC_DRO:
 			{
-				DROPlayer* droplay = dynamic_cast<DROPlayer*>(player);
 				DRO_PLAY_OPTIONS playOpts;
 				char* tokenStr;
 				
-				droplay->GetPlayerOptions(playOpts);
+				plrEn->vtbl.GetPlayerOptions(plrEn, &playOpts.genOpts);
 				
 				printf("Command [SPD/OPL3 data]: ");
 				endPtr = fgets(line, 0x80, stdin);
@@ -816,13 +826,13 @@ static void DoChipControlMode(PlayerBase* player)
 				{
 					double spd = strtod(tokenStr, &endPtr);
 					if (endPtr > tokenStr)
-						droplay->SetPlaybackSpeed(spd);
+						plrEn->vtbl.SetPlaybackSpeed(plrEn, spd);
 				}
 				else if (! strcmp(line, "OPL3"))
 				{
 					playOpts.v2opl3Mode = (UINT8)strtoul(tokenStr, &endPtr, 0);
 					if (endPtr > tokenStr)
-						droplay->SetPlayerOptions(playOpts);
+						plrEn->vtbl.SetPlayerOptions(plrEn, &playOpts.genOpts);
 				}
 				else if (! strcmp(line, "Q"))
 					mode = -1;
@@ -830,13 +840,13 @@ static void DoChipControlMode(PlayerBase* player)
 					mode = 0;
 			}
 				break;
+#if 0
 			case FCC_S98:
 			{
-				S98Player* s98play = dynamic_cast<S98Player*>(player);
 				S98_PLAY_OPTIONS playOpts;
 				char* tokenStr;
 				
-				s98play->GetPlayerOptions(playOpts);
+				plrEn->vtbl.GetPlayerOptions(plrEn, &playOpts.genOpts);
 				
 				printf("Command [SPD data]: ");
 				endPtr = fgets(line, 0x80, stdin);
@@ -853,7 +863,7 @@ static void DoChipControlMode(PlayerBase* player)
 				{
 					double spd = strtod(tokenStr, &endPtr);
 					if (endPtr > tokenStr)
-						s98play->SetPlaybackSpeed(spd);
+						plrEn->vtbl.SetPlaybackSpeed(plrEn, spd);
 				}
 				else if (! strcmp(line, "Q"))
 					mode = -1;
@@ -863,11 +873,10 @@ static void DoChipControlMode(PlayerBase* player)
 				break;
 			case FCC_VGM:
 			{
-				VGMPlayer* vgmplay = dynamic_cast<VGMPlayer*>(player);
 				VGM_PLAY_OPTIONS playOpts;
 				char* tokenStr;
 				
-				vgmplay->GetPlayerOptions(playOpts);
+				plrEn->vtbl.GetPlayerOptions(plrEn, &playOpts.genOpts);
 				
 				printf("Command [SPD/PHZ/HSO data]: ");
 				endPtr = fgets(line, 0x80, stdin);
@@ -884,19 +893,19 @@ static void DoChipControlMode(PlayerBase* player)
 				{
 					double spd = strtod(tokenStr, &endPtr);
 					if (endPtr > tokenStr)
-						vgmplay->SetPlaybackSpeed(spd);
+						plrEn->vtbl.SetPlaybackSpeed(plrEn, spd);
 				}
 				else if (! strcmp(line, "PHZ"))
 				{
 					playOpts.playbackHz = (UINT32)strtoul(tokenStr, &endPtr, 0);
 					if (endPtr > tokenStr)
-						vgmplay->SetPlayerOptions(playOpts);
+						plrEn->vtbl.SetPlayerOptions(plrEn, &playOpts.genOpts);
 				}
 				else if (! strcmp(line, "HSO"))
 				{
 					playOpts.hardStopOld = (UINT8)strtoul(tokenStr, &endPtr, 0);
 					if (endPtr > tokenStr)
-						vgmplay->SetPlayerOptions(playOpts);
+						plrEn->vtbl.SetPlayerOptions(plrEn, &playOpts.genOpts);
 				}
 				else if (! strcmp(line, "Q"))
 					mode = -1;
@@ -906,11 +915,10 @@ static void DoChipControlMode(PlayerBase* player)
 				break;
 			case FCC_GYM:
 			{
-				GYMPlayer* gymplay = dynamic_cast<GYMPlayer*>(player);
 				GYM_PLAY_OPTIONS playOpts;
 				char* tokenStr;
 				
-				gymplay->GetPlayerOptions(playOpts);
+				plrEn->vtbl.GetPlayerOptions(plrEn, &playOpts.genOpts);
 				
 				printf("Command [SPD data]: ");
 				endPtr = fgets(line, 0x80, stdin);
@@ -927,7 +935,7 @@ static void DoChipControlMode(PlayerBase* player)
 				{
 					double spd = strtod(tokenStr, &endPtr);
 					if (endPtr > tokenStr)
-						gymplay->SetPlaybackSpeed(spd);
+						plrEn->vtbl.SetPlaybackSpeed(plrEn, spd);
 				}
 				else if (! strcmp(line, "Q"))
 					mode = -1;
@@ -935,8 +943,9 @@ static void DoChipControlMode(PlayerBase* player)
 					mode = 0;
 			}
 				break;
+#endif
 			default:
-				printf("No player-specific configuration available.\n");
+				printf("No plrEn-specific configuration available.\n");
 				mode = 0;
 				break;
 			}
@@ -1028,12 +1037,13 @@ static std::string FCC2Str(UINT32 fcc)
 	return std::string(result);
 }
 
+#ifdef USE_MEMORY_LOADER
 static UINT8 *SlurpFile(const char *fileName, UINT32 *fileSize)
 {
-	*fileSize = 0;
 	FILE *hFile = fopen(fileName,"rb");
 	UINT32 hFileSize;
 	UINT8 *fileData;
+	*fileSize = 0;
 	if(hFile == NULL) return NULL;
 	fseek(hFile,0,SEEK_END);
 	hFileSize = ftell(hFile);
@@ -1054,6 +1064,7 @@ static UINT8 *SlurpFile(const char *fileName, UINT32 *fileSize)
 	*fileSize = hFileSize;
 	return fileData;
 }
+#endif
 
 static const char* GetFileTitle(const char* filePath)
 {
@@ -1070,23 +1081,23 @@ static const char* GetFileTitle(const char* filePath)
 
 static UINT32 FillBuffer(void* drvStruct, void* userParam, UINT32 bufSize, void* data)
 {
-	PlayerA& myPlr = *(PlayerA*)userParam;
-	if (! (myPlr.GetState() & PLAYSTATE_PLAY))
+	PLAYERA* myPlr = (PLAYERA*)userParam;
+	if (! (PlayerA_GetState(myPlr) & PLAYSTATE_PLAY))
 	{
-		fprintf(stderr, "Player Warning: calling Render while not playing! playState = 0x%02X\n", myPlr.GetState());
+		fprintf(stderr, "Player Warning: calling Render while not playing! playState = 0x%02X\n", PlayerA_GetState(myPlr));
 		memset(data, 0x00, bufSize);
 		return bufSize;
 	}
 	
 	UINT32 renderedBytes;
 	OSMutex_Lock(renderMtx);
-	renderedBytes = myPlr.Render(bufSize, data);
+	renderedBytes = PlayerA_Render(myPlr, bufSize, data);
 	OSMutex_Unlock(renderMtx);
 	
 	return renderedBytes;
 }
 
-static UINT8 FilePlayCallback(PlayerBase* player, void* userParam, UINT8 evtType, void* evtParam)
+static UINT8 FilePlayCallback(PEBASE* plrEn, void* userParam, UINT8 evtType, void* evtParam)
 {
 	switch(evtType)
 	{
@@ -1099,7 +1110,7 @@ static UINT8 FilePlayCallback(PlayerBase* player, void* userParam, UINT8 evtType
 	case PLREVT_LOOP:
 		{
 			UINT32* curLoop = (UINT32*)evtParam;
-			if (player->GetState() & PLAYSTATE_SEEK)
+			if (plrEn->vtbl.GetState(plrEn) & PLAYSTATE_SEEK)
 				break;
 			printf("Loop %u.\n", 1 + *curLoop);
 		}
@@ -1114,7 +1125,7 @@ static UINT8 FilePlayCallback(PlayerBase* player, void* userParam, UINT8 evtType
 	return 0x00;
 }
 
-static DATA_LOADER* RequestFileCallback(void* userParam, PlayerBase* player, const char* fileName)
+static DATA_LOADER* RequestFileCallback(void* userParam, PEBASE* plrEn, const char* fileName)
 {
 	DATA_LOADER* dLoad = FileLoader_Init(fileName);
 	UINT8 retVal = DataLoader_Load(dLoad);
@@ -1132,15 +1143,15 @@ static const char* LogLevel2Str(UINT8 level)
 	return LVL_NAMES[level];
 }
 
-static void PlayerLogCallback(void* userParam, PlayerBase* player, UINT8 level, UINT8 srcType,
+static void PlayerLogCallback(void* userParam, PEBASE* plrEn, UINT8 level, UINT8 srcType,
 	const char* srcTag, const char* message)
 {
 	if (level > logLevel)
 		return;	// don't print messages with higher verbosity than current log level
 	if (srcType == PLRLOGSRC_PLR)
-		printf("[%s] %s: %s", LogLevel2Str(level), player->GetPlayerName(), message);
+		printf("[%s] %s: %s", LogLevel2Str(level), plrEn->vtbl.playerName, message);
 	else
-		printf("[%s] %s %s: %s", LogLevel2Str(level), player->GetPlayerName(), srcTag, message);
+		printf("[%s] %s %s: %s", LogLevel2Str(level), plrEn->vtbl.playerName, srcTag, message);
 	return;
 }
 
@@ -1292,7 +1303,7 @@ static UINT8 StartAudioDevice(void)
 	}
 	
 	locAudBuf.resize(localAudBufSize);
-	mainPlr.SetOutputSettings(opts->sampleRate, opts->numChannels, opts->numBitsPerSmpl, smplAlloc);
+	PlayerA_SetOutputSettings(mainPlr, opts->sampleRate, opts->numChannels, opts->numBitsPerSmpl, smplAlloc);
 	
 	return 0x00;
 }
