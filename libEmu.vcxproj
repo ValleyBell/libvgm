@@ -164,6 +164,7 @@
     </ClCompile>
     <ClCompile Include="emu\cores\ay8910.c" />
     <ClCompile Include="emu\cores\ayintf.c" />
+    <ClCompile Include="emu\cores\bsmt2000.c" />
     <ClCompile Include="emu\cores\c140.c" />
     <ClCompile Include="emu\cores\c219.c" />
     <ClCompile Include="emu\cores\c352.c" />
@@ -251,6 +252,7 @@
     <ClInclude Include="emu\cores\adlibemu_opl_inc.h" />
     <ClInclude Include="emu\cores\ay8910.h" />
     <ClInclude Include="emu\cores\ayintf.h" />
+    <ClInclude Include="emu\cores\bsmt2000.h" />
     <ClInclude Include="emu\cores\c140.h" />
     <ClInclude Include="emu\cores\c219.h" />
     <ClInclude Include="emu\cores\c352.h" />

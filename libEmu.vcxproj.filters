@@ -261,6 +261,9 @@
     <ClCompile Include="emu\cores\msm5232.c">
       <Filter>Quelldateien</Filter>
     </ClCompile>
+    <ClCompile Include="emu\cores\bsmt2000.c">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="emu\EmuStructs.h">
@@ -558,6 +561,9 @@
       <Filter>Headerdateien</Filter>
     </ClInclude>
     <ClInclude Include="emu\cores\msm5232.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="emu\cores\bsmt2000.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
   </ItemGroup>
