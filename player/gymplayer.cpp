@@ -87,19 +87,75 @@ const char* GYMPlayer::GetPlayerName(void) const
 
 /*static*/ UINT8 GYMPlayer::PlayerCanLoadFile(DATA_LOADER *dataLoader)
 {
-	DataLoader_ReadUntil(dataLoader,0x04);
+	DataLoader_ReadUntil(dataLoader, 0x04);
 	if (DataLoader_GetSize(dataLoader) < 0x04)
 		return 0xF1;	// file too small
 	if (! memcmp(&DataLoader_GetData(dataLoader)[0x00], "GYMX", 4))
 		return 0x00;	// valid GYMX header
-	if (DataLoader_GetData(dataLoader)[0x00] <= 0x03)	// check for a valid command byte
-		return 0x00;	// TODO: Check the first 0x40 bytes for a better heuristic
+	DataLoader_ReadUntil(dataLoader, 0x200);
+	if (CheckRawGYMFile(DataLoader_GetSize(dataLoader), DataLoader_GetData(dataLoader)))
+		return 0x00;	// the heuristic for detection raw GYM files found no issues
 	return 0xF0;	// invalid file
 }
 
 UINT8 GYMPlayer::CanLoadFile(DATA_LOADER *dataLoader) const
 {
 	return this->PlayerCanLoadFile(dataLoader);
+}
+
+/*static*/ bool GYMPlayer::CheckRawGYMFile(UINT32 dataLen, const UINT8* data)
+{
+	UINT32 filePos;
+	bool fileEnd;
+	UINT8 curCmd;
+	UINT8 curReg;
+	
+	fileEnd = false;
+	filePos = 0x00;
+	
+	while(filePos < dataLen && data[filePos] == 0x00)
+		filePos ++;
+	if (filePos >= dataLen)
+		return false;	// only 00s - assume invalid file
+	
+	while(! fileEnd && filePos < dataLen)
+	{
+		curCmd = data[filePos];
+		filePos ++;
+		switch(curCmd)
+		{
+		case 0x00:	// wait 1 frame
+			break;
+		case 0x01:	// YM2612 port 0
+		case 0x02:	// YM2612 port 1
+			if (filePos + 0x02 > dataLen)
+				break;
+			curReg = data[filePos + 0x00];
+			// valid YM2612 registers are:
+			//	port 0: 21..BF
+			//	port 1: 30..BF
+			if (curReg >= 0xC0)
+				return false;
+			if (curCmd == 0x01 && curReg < 0x21)
+				return false;
+			if (curCmd == 0x02 && curReg < 0x30)
+				return false;
+			filePos += 0x02;
+			break;
+		case 0x03:	// SEGA PSG
+			if (filePos + 0x01 > dataLen)
+				break;
+			curReg = data[filePos];
+			if (curReg >= 0x40 && curReg < 0x80)
+				return false;	// invalid PSG values
+			filePos += 0x01;
+			break;
+		default:
+			return false;	// assume invalid file
+		}
+	}
+	
+	return true;
 }
 
 UINT8 GYMPlayer::LoadFile(DATA_LOADER *dataLoader)

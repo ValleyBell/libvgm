@@ -77,7 +77,7 @@ void DataLoader_SetPreloadBytes(DATA_LOADER *loader, UINT32 byteCount)
 void DataLoader_ReadUntil(DATA_LOADER *loader, UINT32 fileOffset)
 {
 	if (fileOffset > loader->_bytesLoaded)
-		DataLoader_Read(loader,fileOffset);
+		DataLoader_Read(loader, fileOffset - loader->_bytesLoaded);
 	return;
 }
 
