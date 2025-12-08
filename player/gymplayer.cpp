@@ -109,6 +109,7 @@ UINT8 GYMPlayer::CanLoadFile(DATA_LOADER *dataLoader) const
 	bool fileEnd;
 	UINT8 curCmd;
 	UINT8 curReg;
+	UINT8 doPSGFreq2nd;
 	
 	fileEnd = false;
 	filePos = 0x00;
@@ -118,6 +119,7 @@ UINT8 GYMPlayer::CanLoadFile(DATA_LOADER *dataLoader) const
 	if (filePos >= dataLen)
 		return false;	// only 00s - assume invalid file
 	
+	doPSGFreq2nd = false;
 	while(! fileEnd && filePos < dataLen)
 	{
 		curCmd = data[filePos];
@@ -125,6 +127,7 @@ UINT8 GYMPlayer::CanLoadFile(DATA_LOADER *dataLoader) const
 		switch(curCmd)
 		{
 		case 0x00:	// wait 1 frame
+			doPSGFreq2nd = false;
 			break;
 		case 0x01:	// YM2612 port 0
 		case 0x02:	// YM2612 port 1
@@ -132,9 +135,9 @@ UINT8 GYMPlayer::CanLoadFile(DATA_LOADER *dataLoader) const
 				break;
 			curReg = data[filePos + 0x00];
 			// valid YM2612 registers are:
-			//	port 0: 21..BF
-			//	port 1: 30..BF
-			if (curReg >= 0xC0)
+			//	port 0: 21..B7
+			//	port 1: 30..B7
+			if (curReg >= 0xB8)
 				return false;
 			if (curCmd == 0x01 && curReg < 0x21)
 				return false;
@@ -146,8 +149,23 @@ UINT8 GYMPlayer::CanLoadFile(DATA_LOADER *dataLoader) const
 			if (filePos + 0x01 > dataLen)
 				break;
 			curReg = data[filePos];
-			if (curReg >= 0x40 && curReg < 0x80)
+			if (curReg & 0x80)
+			{
+				// bit 7 set = command byte
+				if ((curReg & 0x10) == 0x00 && (curReg < 0xE0))
+					doPSGFreq2nd = true;	// frequency write - usually followed by a command 00..3F
+				else
+					doPSGFreq2nd = false;	// single command write (volume or noise type)
+			}
+			else if (doPSGFreq2nd && curReg < 0x40)
+			{
+				// this is valid
+				doPSGFreq2nd = false;	// expect no other byte
+			}
+			else
+			{
 				return false;	// invalid PSG values
+			}
 			filePos += 0x01;
 			break;
 		default:
