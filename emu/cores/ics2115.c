@@ -113,8 +113,8 @@ const DEV_DECL sndDev_ICS2115 =
 
 INLINE UINT8 count_leading_zeros_32(UINT32 val)
 {
-	if (!val) return 32U;
 	UINT8 count;
+	if (!val) return 32U;
 	for (count = 0; (INT32)val >= 0; count++) val <<= 1;
 	return count;
 }
@@ -258,6 +258,8 @@ static UINT8 device_start_ics2115(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 {
 	ics2115_state *chip;
 	int i;
+	UINT16 lut[8];
+	UINT16 lut_initial;
 
 	chip = (ics2115_state *)calloc(1, sizeof(ics2115_state));
 	if (chip == NULL)
@@ -290,8 +292,7 @@ static UINT8 device_start_ics2115(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 		chip->volume[i] = ((0x100 | (i & 0xff)) << (VOLUME_BITS-9)) >> (15 - (i>>8));
 
 	//u-Law table as per MIL-STD-188-113
-	UINT16 lut[8];
-	UINT16 lut_initial = 33 << 2;   //shift up 2-bits for 16-bit range.
+	lut_initial = 33 << 2;   //shift up 2-bits for 16-bit range.
 	for (i = 0; i < 8; i++)
 		lut[i] = (lut_initial << i) - lut_initial;
 
@@ -571,6 +572,9 @@ static INT32 get_sample(ics2115_state *chip, ics2115_voice *voice)
 {
 	UINT32 curaddr = voice->osc.acc >> 12;
 	UINT32 nextaddr;
+	INT16 sample1, sample2;
+	INT32 diff;
+	UINT16 fract;
 
 	if (voice->state.on && voice->osc_conf.bitflags.loop && !voice->osc_conf.bitflags.loop_bidir &&
 			(voice->osc.left < (voice->osc.fc << 2)))
@@ -581,7 +585,6 @@ static INT32 get_sample(ics2115_state *chip, ics2115_voice *voice)
 	else
 		nextaddr = curaddr + 2;
 
-	INT16 sample1, sample2;
 	if (voice->osc_conf.bitflags.ulaw)
 	{
 		sample1 = chip->ulaw[read_sample(chip, voice, curaddr)];
@@ -601,16 +604,15 @@ static INT32 get_sample(ics2115_state *chip, ics2115_voice *voice)
 
 	//linear interpolation as in US patent 6,246,774 B1, column 2 row 59
 	//LEN=1, BLEN=0, DIR=0, start+end interpolation
-	INT32 diff = sample2 - sample1;
-	UINT16 fract = (voice->osc.acc >> 3) & 0x1ff;
+	diff = sample2 - sample1;
+	fract = (voice->osc.acc >> 3) & 0x1ff;
 
 	//no need for interpolation since it's around 1 note a cycle?
 	//if (!fract)
 	//    return sample1;
 
-	INT32 sample = (((INT32)sample1 << 9) + diff * fract) >> 9;
-	//sample = sample1;
-	return sample;
+	//return sample1;
+	return (((INT32)sample1 << 9) + diff * fract) >> 9;
 }
 
 static bool playing(ics2115_voice *voice)
@@ -638,11 +640,12 @@ static void update_ramp(ics2115_voice *voice)
 
 static UINT8 fill_output(ics2115_state *chip, ics2115_voice *voice, UINT32 samples, INT32 *loutput, INT32 *routput)
 {
+	UINT32 i;
 	UINT8 irq_invalid = 0;
 	UINT16 fine = 1 << (3 * (voice->vol.incr >> 6));
 	voice->vol.add = (voice->vol.incr & 0x3f) << (10 - fine);
 
-	for (int i = 0; i < samples; i++)
+	for (i = 0; i < samples; i++)
 	{
 		UINT32 volacc = (voice->vol.acc >> 14) & 0xfff;
 		INT16 vlefti = volacc - chip->panlaw[255 - voice->vol.pan]; // left index from acc - pan law
@@ -681,14 +684,16 @@ static UINT8 fill_output(ics2115_state *chip, ics2115_voice *voice, UINT32 sampl
 static void ics2115_update(void *param, UINT32 samples, DEV_SMPL **outputs)
 {
 	ics2115_state *chip = (ics2115_state *)param;
+	UINT8 irq_invalid;
+	int osc;
 
 	memset(outputs[0], 0, samples * sizeof(DEV_SMPL));
 	memset(outputs[1], 0, samples * sizeof(DEV_SMPL));
 	if (chip->rom == NULL)
 		return;
 
-	UINT8 irq_invalid = 0;
-	for (int osc = 0; osc <= chip->active_osc; osc++)
+	irq_invalid = 0;
+	for (osc = 0; osc <= chip->active_osc; osc++)
 	{
 		ics2115_voice *voice = &chip->voice[osc];
 
@@ -1061,7 +1066,7 @@ static void reg_write(ics2115_state *chip, UINT16 data, UINT16 mem_mask)
 			if (ACCESSING_BITS_8_15)
 			{
 				data >>= 8;
-				voice->osc.ctl = data;
+				voice->osc.ctl = (UINT8)data;
 				voice->state.on = !voice->osc.ctl; // some early PGM games need this
 				if (!data)
 					keyon(chip);
@@ -1167,10 +1172,11 @@ static UINT8 ics2115_byte_r(void *info, UINT8 offset)
 			//TODO: check this suspect code
 			if (chip->irq_on)
 			{
+				int i;
 				ret |= 0x80;
 				if (chip->irq_enabled && (chip->irq_pending & 3))
 					ret |= 1;
-				for (int i = 0; i <= chip->active_osc; i++)
+				for (i = 0; i <= chip->active_osc; i++)
 				{
 					if (//chip->voice[i].vol_ctrl.bitflags.irq_pending ||
 						chip->voice[i].osc_conf.bitflags.irq_pending)
