@@ -98,15 +98,18 @@ static struct player_engine_vtable DROEngine_vtbl;
 
 INLINE UINT16 ReadLE16(const UINT8* data);
 INLINE UINT32 ReadLE32(const UINT8* data);
+
 PE_DRO* DROEngine_Create(void);
 void DROEngine_Destroy(PE_DRO* self);
 void DROEngine_Init(PE_DRO* self);
 void DROEngine_Deinit(PE_DRO* self);
+
 UINT8 DROEngine_CanLoadFile(DATA_LOADER *dataLoader);
 UINT8 DROEngine_LoadFile(PE_DRO* self, DATA_LOADER *dataLoader);
 static void DROEngine_ScanInitBlock(PE_DRO* self);
 UINT8 DROEngine_UnloadFile(PE_DRO* self);
 const DRO_HEADER* DROEngine_GetFileHeader(const PE_DRO* self);
+
 const char* const* DROEngine_GetTags(PE_DRO* self);
 UINT8 DROEngine_GetSongInfo(PE_DRO* self, PLR_SONG_INFO* songInf);
 UINT8 DROEngine_GetSongDeviceInfo(const PE_DRO* self, size_t* retDevInfCount, PLR_DEV_INFO** retDevInfData);
@@ -119,19 +122,21 @@ UINT8 DROEngine_SetDeviceMuting(PE_DRO* self, UINT32 id, const PLR_MUTE_OPTS* mu
 UINT8 DROEngine_GetDeviceMuting(const PE_DRO* self, UINT32 id, PLR_MUTE_OPTS* muteOpts);
 UINT8 DROEngine_SetPlayerOptions(PE_DRO* self, const DRO_PLAY_OPTIONS* playOpts);
 UINT8 DROEngine_GetPlayerOptions(const PE_DRO* self, DRO_PLAY_OPTIONS* playOpts);
+
 UINT8 DROEngine_SetSampleRate(PE_DRO* self, UINT32 sampleRate);
 double DROEngine_GetPlaybackSpeed(const PE_DRO* self);
 UINT8 DROEngine_SetPlaybackSpeed(PE_DRO* self, double speed);
-
 static void DROEngine_RefreshTSRates(PE_DRO* self);
 UINT32 DROEngine_Tick2Sample(const PE_DRO* self, UINT32 ticks);
 UINT32 DROEngine_Sample2Tick(const PE_DRO* self, UINT32 samples);
 double DROEngine_Tick2Second(const PE_DRO* self, UINT32 ticks);
+
 UINT8 DROEngine_GetState(const PE_DRO* self);
 UINT32 DROEngine_GetCurPos(const PE_DRO* self, UINT8 unit);
 UINT32 DROEngine_GetCurLoop(const PE_DRO* self);
 UINT32 DROEngine_GetTotalTicks(const PE_DRO* self);
 UINT32 DROEngine_GetLoopTicks(const PE_DRO* self);
+
 static void DROEngine_PlayerLogCB(void* userParam, void* source, UINT8 level, const char* message);
 static void DROEngine_SndEmuLogCB(void* userParam, void* source, UINT8 level, const char* message);
 
@@ -621,6 +626,7 @@ UINT8 DROEngine_SetDeviceOptions(PE_DRO* self, UINT32 id, const PLR_DEV_OPTS* de
 	size_t devID = self->optDevMap[optID];
 	if (devID < self->devices.size)
 		DROEngine_RefreshMuting(self, &self->devices.data[devID], &self->devOpts[optID].muteOpts);
+		// TODO: RefreshPanning
 	return 0x00;
 }
 
@@ -692,7 +698,6 @@ UINT8 DROEngine_SetPlaybackSpeed(PE_DRO* self, double speed)
 	return 0x00;
 }
 
-
 static void DROEngine_RefreshTSRates(PE_DRO* self)
 {
 	self->ttMult = 1;
@@ -739,6 +744,7 @@ UINT8 DROEngine_GetState(const PE_DRO* self)
 {
 	return self->playState;
 }
+
 
 UINT32 DROEngine_GetCurPos(const PE_DRO* self, UINT8 unit)
 {
@@ -905,6 +911,8 @@ UINT8 DROEngine_Start(PE_DRO* self)
 		{
 			if (cDev->base.defInf.devDef->SetOptionBits != NULL)
 				cDev->base.defInf.devDef->SetOptionBits(cDev->base.defInf.dataPtr, devOpts->coreOpts);
+			// TODO: RefreshMuting
+			// TODO: RefreshPanning
 			
 			self->optDevMap[cDev->optID] = curDev;
 		}

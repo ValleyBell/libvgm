@@ -113,7 +113,7 @@ typedef struct player_generic_options
 		T* data;		\
 	} name;
 #define PE_ARRAY_MALLOC(var, T, count)	{ \
-	(var).data = (T*)malloc(sizeof(T) * count);	\
+	(var).data = (T*)malloc(sizeof(T) * (count));	\
 	(var).size = count; }
 #define PE_ARRAY_CALLOC(var, T, count)	{ \
 	(var).data = (T*)calloc(count, sizeof(T));	\
@@ -129,11 +129,11 @@ typedef struct player_generic_options
 		T* data;		\
 	} name;
 #define PE_VECTOR_ALLOC(var, T, count)	{ \
-	(var).data = (T*)malloc(sizeof(T) * count);	\
+	(var).data = (T*)malloc(sizeof(T) * (count));	\
 	(var).alloc = count; \
 	(var).size = 0; }
 #define PE_VECTOR_REALLOC(var, T, count)	{ \
-	(var).data = (T*)realloc((var).data, sizeof(T) * count);	\
+	(var).data = (T*)realloc((var).data, sizeof(T) * (count));	\
 	(var).alloc = count; }
 #define PE_VECTOR_FREE(var)	{ \
 	free((var).data);	(var).data = NULL;	\

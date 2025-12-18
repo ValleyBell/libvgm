@@ -1,13 +1,13 @@
-	prepend class prefix to member functions ("void Method()" -> "void PlayerA::Method()"
-s# \([A-Za-z0-9_]*([^)]\)# PlayerA::\1#
+	prepend class prefix to member functions ("void Method()" -> "void AAAEngine::Method()"
+s# \([A-Za-z0-9_]*([^)]\)# AAAEngine::\1#
 
-	replace "PlayerA::Func(" with "PlayerA__Func(PLAYERA* self, "
-%s#\(PlayerA\)::\([^(]*\)(#\1_\2(PLAYERA* self, #
+	replace "AAAEngine::Func(" with "AAAEngine__Func(PE_AAA* self, "
+%s#\(AAAEngine\)::\([^(]*\)(#\1_\2(PE_AAA* self, #
 
 	replace "self, void" with "self"
 %s#\(self\), void#\1#
 
-	replace "(PLAYERA* self, [...]) const" with "(const PLAYERA* self, [...])"
+	replace "(PE_AAA* self, [...]) const" with "(const PE_AAA* self, [...])"
 %s#(\([^ ]* self.*)\) const#(const \1#
 
 	replace "_var" with "self->var"

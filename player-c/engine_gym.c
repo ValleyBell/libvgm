@@ -97,11 +97,16 @@ struct player_engine_gym
 static struct player_engine_vtable GYMEngine_vtbl;
 
 INLINE UINT32 ReadLE32(const UINT8* data);
+INLINE void SaveDeviceConfig(ARR_UINT8* dst, const void* srcData, size_t srcLen);
+static void FreeStringVectorData(VEC_STR* vec);
+
 PE_GYM* GYMEngine_Create(void);
 void GYMEngine_Destroy(PE_GYM* self);
 void GYMEngine_Init(PE_GYM* self);
 void GYMEngine_Deinit(PE_GYM* self);
+
 UINT8 GYMEngine_CanLoadFile(DATA_LOADER *dataLoader);
+static UINT8 GYMEngine_CheckRawGYMFile(UINT32 dataLen, const UINT8* data);
 UINT8 GYMEngine_LoadFile(PE_GYM* self, DATA_LOADER *dataLoader);
 static UINT8 GYMEngine_DecompressZlibData(PE_GYM* self);
 static void GYMEngine_CalcSongLength(PE_GYM* self);
@@ -110,6 +115,7 @@ static void GYMEngine_LoadTag(PE_GYM* self, const char* tagName, const void* dat
 static char* GYMEngine_GetUTF8String(PE_GYM* self, const char* startPtr, const char* endPtr);
 UINT8 GYMEngine_UnloadFile(PE_GYM* self);
 const GYM_HEADER* GYMEngine_GetFileHeader(const PE_GYM* self);
+
 const char* const* GYMEngine_GetTags(PE_GYM* self);
 UINT8 GYMEngine_GetSongInfo(PE_GYM* self, PLR_SONG_INFO* songInf);
 UINT8 GYMEngine_GetSongDeviceInfo(const PE_GYM* self, size_t* retDevInfCount, PLR_DEV_INFO** retDevInfData);
@@ -122,19 +128,21 @@ UINT8 GYMEngine_SetDeviceMuting(PE_GYM* self, UINT32 id, const PLR_MUTE_OPTS* mu
 UINT8 GYMEngine_GetDeviceMuting(const PE_GYM* self, UINT32 id, PLR_MUTE_OPTS* muteOpts);
 UINT8 GYMEngine_SetPlayerOptions(PE_GYM* self, const GYM_PLAY_OPTIONS* playOpts);
 UINT8 GYMEngine_GetPlayerOptions(const PE_GYM* self, GYM_PLAY_OPTIONS* playOpts);
+
 UINT8 GYMEngine_SetSampleRate(PE_GYM* self, UINT32 sampleRate);
 double GYMEngine_GetPlaybackSpeed(const PE_GYM* self);
 UINT8 GYMEngine_SetPlaybackSpeed(PE_GYM* self, double speed);
-
 static void GYMEngine_RefreshTSRates(PE_GYM* self);
 UINT32 GYMEngine_Tick2Sample(const PE_GYM* self, UINT32 ticks);
 UINT32 GYMEngine_Sample2Tick(const PE_GYM* self, UINT32 samples);
 double GYMEngine_Tick2Second(const PE_GYM* self, UINT32 ticks);
+
 UINT8 GYMEngine_GetState(const PE_GYM* self);
 UINT32 GYMEngine_GetCurPos(const PE_GYM* self, UINT8 unit);
 UINT32 GYMEngine_GetCurLoop(const PE_GYM* self);
 UINT32 GYMEngine_GetTotalTicks(const PE_GYM* self);
 UINT32 GYMEngine_GetLoopTicks(const PE_GYM* self);
+
 static void GYMEngine_PlayerLogCB(void* userParam, void* source, UINT8 level, const char* message);
 static void GYMEngine_SndEmuLogCB(void* userParam, void* source, UINT8 level, const char* message);
 
@@ -266,14 +274,86 @@ void GYMEngine_Deinit(PE_GYM* self)
 
 UINT8 GYMEngine_CanLoadFile(DATA_LOADER *dataLoader)
 {
-	DataLoader_ReadUntil(dataLoader,0x04);
+	DataLoader_ReadUntil(dataLoader, 0x04);
 	if (DataLoader_GetSize(dataLoader) < 0x04)
 		return 0xF1;	// file too small
 	if (! memcmp(&DataLoader_GetData(dataLoader)[0x00], "GYMX", 4))
 		return 0x00;	// valid GYMX header
-	if (DataLoader_GetData(dataLoader)[0x00] <= 0x03)	// check for a valid command byte
-		return 0x00;	// TODO: Check the first 0x40 bytes for a better heuristic
+	DataLoader_ReadUntil(dataLoader, 0x200);
+	if (GYMEngine_CheckRawGYMFile(DataLoader_GetSize(dataLoader), DataLoader_GetData(dataLoader)))
+		return 0x00;	// The heuristic for detection raw GYM files found no issues - assume good file
 	return 0xF0;	// invalid file
+}
+
+static UINT8 GYMEngine_CheckRawGYMFile(UINT32 dataLen, const UINT8* data)
+{
+	UINT32 filePos;
+	UINT8 curCmd;
+	UINT8 curReg;
+	UINT8 doPSGFreq2nd;
+	
+	filePos = 0x00;
+	
+	while(filePos < dataLen && data[filePos] == 0x00)
+		filePos ++;
+	if (filePos >= dataLen)
+		return 0;	// only 00s - assume invalid file
+	
+	doPSGFreq2nd = false;
+	while(filePos < dataLen)
+	{
+		curCmd = data[filePos];
+		filePos ++;
+		switch(curCmd)
+		{
+		case 0x00:	// wait 1 frame
+			doPSGFreq2nd = false;
+			break;
+		case 0x01:	// YM2612 port 0
+		case 0x02:	// YM2612 port 1
+			if (filePos + 0x02 > dataLen)
+				break;
+			curReg = data[filePos + 0x00];
+			// valid YM2612 registers are:
+			//	port 0: 21..B7
+			//	port 1: 30..B7
+			if (curReg >= 0xB8)
+				return 0;
+			if (curCmd == 0x01 && curReg < 0x21)
+				return 0;
+			if (curCmd == 0x02 && curReg < 0x30)
+				return 0;
+			filePos += 0x02;
+			break;
+		case 0x03:	// SEGA PSG
+			if (filePos + 0x01 > dataLen)
+				break;
+			curReg = data[filePos];
+			if (curReg & 0x80)
+			{
+				// bit 7 set = command byte
+				if ((curReg & 0x10) == 0x00 && (curReg < 0xE0))
+					doPSGFreq2nd = true;	// frequency write - usually followed by a command 00..3F
+				else
+					doPSGFreq2nd = false;	// single command write (volume or noise type)
+			}
+			else if (doPSGFreq2nd && curReg < 0x40)
+			{
+				// this is valid
+				doPSGFreq2nd = false;	// expect no other byte
+			}
+			else
+			{
+				return 0;	// invalid PSG values
+			}
+			filePos += 0x01;
+			break;
+		default:
+			return 0;	// assume invalid file
+		}
+	}
+	
+	return 1;
 }
 
 UINT8 GYMEngine_LoadFile(PE_GYM* self, DATA_LOADER *dataLoader)
@@ -358,15 +438,13 @@ static UINT8 GYMEngine_DecompressZlibData(PE_GYM* self)
 static void GYMEngine_CalcSongLength(PE_GYM* self)
 {
 	UINT32 filePos;
-	bool fileEnd;
 	UINT8 curCmd;
 	
 	self->totalTicks = 0;
 	self->loopOfs = 0;
 	
-	fileEnd = false;
 	filePos = self->fileHdr.dataOfs;
-	while(! fileEnd && filePos < self->fileLen)
+	while(filePos < self->fileLen)
 	{
 		if (self->totalTicks == self->fileHdr.loopFrame && self->fileHdr.loopFrame != 0)
 			self->loopOfs = filePos;
@@ -386,7 +464,7 @@ static void GYMEngine_CalcSongLength(PE_GYM* self)
 			filePos += 0x01;
 			break;
 		default:
-			fileEnd = true;
+			// just ignore unknown commands
 			break;
 		}
 	}
@@ -413,7 +491,7 @@ static UINT8 GYMEngine_LoadTags(PE_GYM* self)
 	GYMEngine_LoadTag(self, "ENCODED_BY",   &self->fileData[0x84], 0x20);
 	GYMEngine_LoadTag(self, "COMMENT",      &self->fileData[0xA4], 0x100);
 	
-	self->tagList.data[self->tagList.size] = NULL;
+	self->tagList.data[self->tagList.size] = NULL;	// add list terminator
 	self->tagList.size ++;
 	return 0x00;
 }
@@ -449,9 +527,7 @@ static char* GYMEngine_GetUTF8String(PE_GYM* self, const char* startPtr, const c
 	{
 		size_t convSize = 0;
 		char* convData = NULL;
-		UINT8 retVal;
-		
-		retVal = CPConv_StrConvert(self->cpc1252, &convSize, &convData, endPtr - startPtr, startPtr);
+		UINT8 retVal = CPConv_StrConvert(self->cpc1252, &convSize, &convData, endPtr - startPtr, startPtr);
 		if (retVal < 0x80)
 		{
 			result = (char*)malloc(convSize + 1);
@@ -620,6 +696,7 @@ UINT8 GYMEngine_SetDeviceOptions(PE_GYM* self, UINT32 id, const PLR_DEV_OPTS* de
 	size_t devID = self->optDevMap[optID];
 	if (devID < self->devices.size)
 		GYMEngine_RefreshMuting(self, &self->devices.data[devID], &self->devOpts[optID].muteOpts);
+		// TODO: RefreshPanning
 	return 0x00;
 }
 
@@ -886,6 +963,8 @@ UINT8 GYMEngine_Start(PE_GYM* self)
 		{
 			if (cDev->base.defInf.devDef->SetOptionBits != NULL)
 				cDev->base.defInf.devDef->SetOptionBits(cDev->base.defInf.dataPtr, devOpts->coreOpts);
+			// TODO: RefreshMuting
+			// TODO: RefreshPanning
 			
 			self->optDevMap[cDev->optID] = curDev;
 		}
@@ -1036,6 +1115,8 @@ UINT32 GYMEngine_Render(PE_GYM* self, UINT32 smplCnt, WAVE_32BS* data)
 		if (self->pcmInPos > 0)
 		{
 			// PCM buffer handling
+			UINT32 pcmIdx;
+
 			// Stream all buffered writes to the YM2612, evenly distributed over the current frame.
 			if (pcmLastBase != self->pcmBaseTick)
 			{
@@ -1043,7 +1124,7 @@ UINT32 GYMEngine_Render(PE_GYM* self, UINT32 smplCnt, WAVE_32BS* data)
 				pcmSmplStart = GYMEngine_Tick2Sample(self, self->pcmBaseTick);
 				pcmSmplLen = GYMEngine_Tick2Sample(self, self->pcmBaseTick + 1) - pcmSmplStart;
 			}
-			UINT32 pcmIdx = (self->playSmpl - pcmSmplStart) * self->pcmInPos / pcmSmplLen;
+			pcmIdx = (self->playSmpl - pcmSmplStart) * self->pcmInPos / pcmSmplLen;
 			if (pcmIdx != self->pcmOutPos)
 			{
 				GYM_CHIPDEV* cDev = &self->devices.data[0];
@@ -1097,13 +1178,13 @@ static void GYMEngine_ParseFile(PE_GYM* self, UINT32 ticks)
 
 static void GYMEngine_DoCommand(PE_GYM* self)
 {
+	UINT8 curCmd;
+	
 	if (self->filePos >= self->fileLen)
 	{
 		GYMEngine_DoFileEnd(self);
 		return;
 	}
-	
-	UINT8 curCmd;
 	
 	curCmd = self->fileData[self->filePos];
 	self->filePos ++;
@@ -1161,10 +1242,10 @@ static void GYMEngine_DoCommand(PE_GYM* self)
 				
 				if (isLatch)
 				{
-					bool needPatch = true;
+					UINT8 needPatch = 1;
 					if (self->filePos + 0x01 < self->fileLen &&
 						self->fileData[self->filePos + 0x00] == curCmd && self->fileData[self->filePos + 0x01] == (reg ^ 0x04))
-						needPatch = false;	// the next write is the 2nd part - no patch needed
+						needPatch = 0;	// the next write is the 2nd part - no patch needed
 					
 					cDev->write(dataPtr, (port << 1) | 0, reg);
 					cDev->write(dataPtr, (port << 1) | 1, data);
@@ -1212,6 +1293,9 @@ static void GYMEngine_DoCommand(PE_GYM* self)
 			
 			cDev->write(dataPtr, SN76496_W_REG, data);
 		}
+		return;
+	default:
+		emu_logf(&self->logger, PLRLOG_WARN, "Unknown GYM command %02X found! (filePos 0x%06X)\n", curCmd, self->filePos - 0x01);
 		return;
 	}
 	
