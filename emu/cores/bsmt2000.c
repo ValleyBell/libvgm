@@ -190,12 +190,18 @@ static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
 	return names;
 }
 
+static const DEVLINK_IDS* DeviceLinkIDs(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
+
 const DEV_DECL sndDev_BSMT2000 =
 {
 	DEVID_BSMT2000,
 	DeviceName,
 	DeviceChannels,
 	DeviceChannelNames,
+	DeviceLinkIDs,
 	{	// cores
 		&devDef,
 		NULL

@@ -314,6 +314,7 @@ int main(int argc, char* argv[])
 		PLR_SONG_INFO sInf;
 		std::vector<PLR_DEV_INFO> diList;
 		size_t curDev;
+		size_t curLDev;
 		
 		player->GetSongInfo(sInf);
 		player->GetSongDeviceInfo(diList);
@@ -333,6 +334,21 @@ int main(int argc, char* argv[])
 			printf(" Dev %d: Type 0x%02X %7s #%d, Core %-4s, Clk %u, Rate %u, Vol 0x%X, Chns %u\n",
 				(int)pdi.id, pdi.type, devName, (INT8)pdi.instance, FCC2Str(pdi.core).c_str(),
 				pdi.devCfg->clock, pdi.smplRate, pdi.volume, chns);
+			
+			for (curLDev = 0; curLDev < pdi.devLink.size(); curLDev ++)
+			{
+				const PLR_DEV_INFO& pdil = pdi.devLink[curLDev];
+				const char* devLName = "";
+				UINT16 chnsL = 0;
+				if (pdil.devDecl != NULL)
+				{
+					devLName = pdil.devDecl->name(pdil.devCfg);
+					chnsL = pdil.devDecl->channelCount(pdil.devCfg);
+				}
+				printf("  Dev %d-%d: Type 0x%02X %7s, Core %-4s, Clk %u, Rate %u, Vol 0x%X, Chns %u\n",
+					(int)pdil.id, curLDev, pdil.type, devLName, FCC2Str(pdil.core).c_str(),
+					pdil.devCfg->clock, pdil.smplRate, pdil.volume, chnsL);
+			}
 		}
 	}
 	const std::vector<VGMPlayer::DACSTRM_DEV>* vgmPcmStrms = NULL;

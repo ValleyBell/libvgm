@@ -128,12 +128,18 @@ static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
 	return names;
 }
 
+static const DEVLINK_IDS* DeviceLinkIDs(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
+
 const DEV_DECL sndDev_GB_DMG =
 {
 	DEVID_GB_DMG,
 	DeviceName,
 	DeviceChannels,
 	DeviceChannelNames,
+	DeviceLinkIDs,
 	{	// cores
 		&devDef,
 		NULL

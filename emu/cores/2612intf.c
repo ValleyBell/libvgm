@@ -130,12 +130,18 @@ static const char** DeviceChannelNames_YM2612(const DEV_GEN_CFG* devCfg)
 	return names;
 }
 
+static const DEVLINK_IDS* DeviceLinkIDs_YM2612(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
+
 const DEV_DECL sndDev_YM2612 =
 {
 	DEVID_YM2612,
 	DeviceName_YM2612,
 	DeviceChannels_YM2612,
 	DeviceChannelNames_YM2612,
+	DeviceLinkIDs_YM2612,
 	{	// cores
 #ifdef EC_YM2612_GPGX
 		&devDef_MAME,

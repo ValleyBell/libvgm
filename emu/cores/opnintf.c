@@ -45,6 +45,15 @@ typedef struct _opn_info
 } OPN_INF;
 
 
+static const DEVLINK_IDS* DeviceLinkIDs_OPN(const DEV_GEN_CFG* devCfg)
+{
+	static const DEVLINK_IDS dlIDs = {
+		1, {DEVID_AY8910}
+	};
+	return &dlIDs;
+}
+
+
 #ifdef SNDDEV_YM2203
 static DEVDEF_RWFUNC devFunc_MAME_2203[] =
 {
@@ -94,6 +103,7 @@ const DEV_DECL sndDev_YM2203 =
 	DeviceName_YM2203,
 	DeviceChannels_YM2203,
 	DeviceChannelNames_YM2203,
+	DeviceLinkIDs_OPN,
 	{	// cores
 		&devDef_MAME_2203,
 		NULL
@@ -158,6 +168,7 @@ const DEV_DECL sndDev_YM2608 =
 	DeviceName_YM2608,
 	DeviceChannels_YM2608,
 	DeviceChannelNames_YM2608,
+	DeviceLinkIDs_OPN,
 	{	// cores
 		&devDef_MAME_2608,
 		NULL
@@ -246,6 +257,7 @@ const DEV_DECL sndDev_YM2610 =
 	DeviceName_YM2610,
 	DeviceChannels_YM2610,
 	DeviceChannelNames_YM2610,
+	DeviceLinkIDs_OPN,
 	{	// cores
 		&devDef_MAME_2610,
 		NULL

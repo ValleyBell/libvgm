@@ -560,7 +560,7 @@ UINT8 VGMPlayer::GetSongDeviceInfo(std::vector<PLR_DEV_INFO>& devInfList) const
 		PLR_DEV_INFO devInf;
 		
 		// chip configuration from VGM header
-		memset(&devInf, 0x00, sizeof(PLR_DEV_INFO));
+		//memset(&devInf, 0x00, sizeof(PLR_DEV_INFO));
 		devInf.type = sdCfg.type;
 		devInf.id = (UINT32)sdCfg.deviceID;
 		devInf.instance = (UINT8)sdCfg.instance;
@@ -569,10 +569,29 @@ UINT8 VGMPlayer::GetSongDeviceInfo(std::vector<PLR_DEV_INFO>& devInfList) const
 		{
 			// when playing, get information from device structures (may feature modified volume levels)
 			const VGM_BASEDEV* clDev = &cDev->base;
+			UINT32 curLDev;
+			
 			devInf.devDecl = clDev->defInf.devDecl;
 			devInf.core = (clDev->defInf.devDef != NULL) ? clDev->defInf.devDef->coreID : 0x00;
 			devInf.volume = (clDev->resmpl.volumeL + clDev->resmpl.volumeR) / 2;
 			devInf.smplRate = clDev->defInf.sampleRate;
+			
+			for (curLDev = 0, clDev = clDev->linkDev; curLDev < cDev->base.defInf.linkDevCount && clDev != NULL; curLDev ++, clDev = clDev->linkDev)
+			{
+				const DEVLINK_INFO* dLink = &cDev->base.defInf.linkDevs[curLDev];
+				PLR_DEV_INFO lDevInf;
+				
+				//memset(&lDevInf, 0x00, sizeof(PLR_DEV_INFO));
+				lDevInf.type = dLink->devID;
+				lDevInf.id = (UINT32)sdCfg.deviceID;
+				lDevInf.instance = 0xFF;
+				lDevInf.devCfg = dLink->cfg;
+				lDevInf.devDecl = clDev->defInf.devDecl;
+				lDevInf.core = (clDev->defInf.devDef != NULL) ? clDev->defInf.devDef->coreID : 0x00;
+				lDevInf.volume = (clDev->resmpl.volumeL + clDev->resmpl.volumeR) / 2;
+				lDevInf.smplRate = clDev->defInf.sampleRate;
+				devInf.devLink.push_back(lDevInf);
+			}
 		}
 		else
 		{
@@ -580,6 +599,27 @@ UINT8 VGMPlayer::GetSongDeviceInfo(std::vector<PLR_DEV_INFO>& devInfList) const
 			devInf.core = 0x00;
 			devInf.volume = GetChipVolume(sdCfg.vgmChipType, sdCfg.instance, 0);
 			devInf.smplRate = 0;
+			
+			const DEVLINK_IDS* dlIds = devInf.devDecl->linkDevIDs(dCfg);
+			if (dlIds != NULL && dlIds->devCount > 0)
+			{
+				size_t curLDev;
+				for (curLDev = 0; curLDev < dlIds->devCount; curLDev ++)
+				{
+					PLR_DEV_INFO lDevInf;
+					
+					//memset(&lDevInf, 0x00, sizeof(PLR_DEV_INFO));
+					lDevInf.type = dlIds->devIDs[curLDev];
+					lDevInf.id = (UINT32)sdCfg.deviceID;
+					lDevInf.instance = 0xFF;
+					lDevInf.devDecl = SndEmu_GetDevDecl(lDevInf.type, _userDevList, _devStartOpts);
+					lDevInf.devCfg = NULL;
+					lDevInf.core = 0x00;
+					lDevInf.volume = GetChipVolume(sdCfg.vgmChipType, sdCfg.instance, 1);
+					lDevInf.smplRate = 0;
+					devInf.devLink.push_back(lDevInf);
+				}
+			}
 		}
 		devInfList.push_back(devInf);
 	}

@@ -33,12 +33,18 @@ static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
 	return NULL;
 }
 
+static const DEVLINK_IDS* DeviceLinkIDs(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
+
 const DEV_DECL sndDev_RF5C68 =
 {
 	DEVID_RF5C68,
 	DeviceName,
 	DeviceChannels,
 	DeviceChannelNames,
+	DeviceLinkIDs,
 	{	// cores
 #ifdef EC_RF5C68_MAME
 		&devDef_RF5C68_MAME,

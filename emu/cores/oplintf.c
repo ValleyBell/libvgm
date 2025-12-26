@@ -132,6 +132,11 @@ static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
 	};
 	return names;
 }
+
+static const DEVLINK_IDS* DeviceLinkIDs(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
 #endif
 
 #ifdef SNDDEV_YM3812
@@ -146,6 +151,7 @@ const DEV_DECL sndDev_YM3812 =
 	DeviceName_YM3812,
 	DeviceChannels,
 	DeviceChannelNames,
+	DeviceLinkIDs,
 	{	// cores
 #ifdef EC_YM3812_ADLIBEMU
 		&devDef3812_AdLibEmu,	// default, because it's better than MAME
@@ -200,6 +206,7 @@ const DEV_DECL sndDev_YM3526 =
 	DeviceName_YM3526,
 	DeviceChannels,
 	DeviceChannelNames,
+	DeviceLinkIDs,
 	{	// cores
 		&devDef3526_MAME,
 		NULL
@@ -265,6 +272,7 @@ const DEV_DECL sndDev_Y8950 =
 	DeviceName_Y8950,
 	DeviceChannels_Y8950,
 	DeviceChannelNames_Y8950,
+	DeviceLinkIDs,
 	{	// cores
 		&devDef8950_MAME,
 		NULL

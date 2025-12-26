@@ -14,28 +14,29 @@
 static const char* DeviceName(const DEV_GEN_CFG* devCfg)
 {
 	const AY8910_CFG* ayCfg = (const AY8910_CFG*)devCfg;
-	if (devCfg == NULL)
-		return "AY-3-8910";
+	UINT8 chipType = (devCfg != NULL) ? ayCfg->chipType : AYTYPE_AY8910;
+	if ((chipType & 0xF0) == 0x20)
+		chipType = AYTYPE_YM2149;
 	
-	switch(ayCfg->chipType)
+	switch(chipType)
 	{
-	case 0x00:
+	case AYTYPE_AY8910:
 		return "AY-3-8910";
-	case 0x01:
+	case AYTYPE_AY8912:
 		return "AY-3-8912";
-	case 0x02:
+	case AYTYPE_AY8913:
 		return "AY-3-8913";
-	case 0x03:
+	case AYTYPE_AY8930:
 		return "AY8930";
-	case 0x04:
+	case AYTYPE_AY8914:
 		return "AY-3-8914";
-	case 0x10:
+	case AYTYPE_YM2149:
 		return "YM2149";
-	case 0x11:
+	case AYTYPE_YM3439:
 		return "YM3439";
-	case 0x12:
+	case AYTYPE_YMZ284:
 		return "YMZ284";
-	case 0x13:
+	case AYTYPE_YMZ294:
 		return "YMZ294";
 	default:
 		return "AY-89xx";
@@ -52,12 +53,18 @@ static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
 	return NULL;
 }
 
+static const DEVLINK_IDS* DeviceLinkIDs(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
+
 const DEV_DECL sndDev_AY8910 =
 {
 	DEVID_AY8910,
 	DeviceName,
 	DeviceChannels,
 	DeviceChannelNames,
+	DeviceLinkIDs,
 	{	// cores
 #ifdef EC_AY8910_EMU2149
 		&devDef_YM2149_Emu,

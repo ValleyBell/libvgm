@@ -68,6 +68,7 @@ struct PLR_DEV_INFO
 	UINT32 smplRate;	// current sample rate (0 if not running)
 	const DEV_DECL* devDecl;	// device declaration
 	const DEV_GEN_CFG* devCfg;	// device configuration parameters
+	std::vector<PLR_DEV_INFO> devLink;
 };
 
 struct PLR_MUTE_OPTS

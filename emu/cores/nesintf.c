@@ -145,12 +145,18 @@ static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
 	return names;
 }
 
+static const DEVLINK_IDS* DeviceLinkIDs(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
+
 const DEV_DECL sndDev_NES_APU =
 {
 	DEVID_NES_APU,
 	DeviceName,
 	DeviceChannels,
 	DeviceChannelNames,
+	DeviceLinkIDs,
 	{	// cores
 #ifdef EC_NES_NSFPLAY
 		&devDef_NSFPlay,

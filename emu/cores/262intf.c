@@ -135,12 +135,18 @@ static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
 	return names;
 }
 
+static const DEVLINK_IDS* DeviceLinkIDs(const DEV_GEN_CFG* devCfg)
+{
+	return NULL;
+}
+
 const DEV_DECL sndDev_YMF262 =
 {
 	DEVID_YMF262,
 	DeviceName,
 	DeviceChannels,
 	DeviceChannelNames,
+	DeviceLinkIDs,
 	{	// cores
 #ifdef EC_YMF262_ADLIBEMU
 		&devDef262_AdLibEmu,	// default, because it's better than MAME
