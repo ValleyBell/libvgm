@@ -230,6 +230,7 @@ LIBEMUOBJS = \
 	$(LIBEMUOBJ)/cores/x1_010.o \
 	$(LIBEMUOBJ)/cores/c352.o \
 	$(LIBEMUOBJ)/cores/iremga20.o \
+	$(LIBEMUOBJ)/cores/ymfmintf.o \
 	$(LIBEMUOBJ)/Resampler.o \
 	$(LIBEMUOBJ)/panning.o \
 	$(LIBEMUOBJ)/dac_control.o
