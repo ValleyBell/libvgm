@@ -652,7 +652,7 @@ if(SNDEMU_ICS2115_ALL)
 endif()
 if(SNDEMU_YM2414_YMFM)
 	set(EMU_DEFS ${EMU_DEFS} " SNDDEV_YM2414" " EC_YM2414_YMFM")
-	set(EMU_FILES ${EMU_FILES} cores/ymfmintf.cpp)
+	set(EMU_FILES ${EMU_FILES} cores/ymfmintf.cpp cores/ymfm/ymfm_opz.cpp)
 	set(EMU_CORE_HEADERS ${EMU_CORE_HEADERS} cores/ymfmintf.h)
 	set(EMU_CORE_HEADERS ${EMU_CORE_HEADERS}
 		cores/ymfm/ymfm.h

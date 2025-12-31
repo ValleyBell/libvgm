@@ -18,7 +18,9 @@ extern "C"
 }
 
 #include "ymfm/ymfm.h"
+#include "ymfm/ymfm_fm.h"
 #include "ymfm/ymfm_opz.h"
+#include "ymfm/ymfm_fm.ipp"
 
 
 // FourCC for ymfm cores
@@ -192,9 +194,13 @@ static UINT8 ym2414_write(void* chip, UINT8 offset, UINT8 data)
 	case 0x00:	// Address
 		info->address = data;
 		info->chip->write_address(data);
+		// Debug
+		//printf("YM2414: Write address 0x%02X\n", data);
 		break;
 	case 0x01:	// Data
 		info->chip->write_data(data);
+		// Debug
+		//printf("YM2414: Write data 0x%02X to address 0x%02X\n", data, info->address);
 		break;
 	}
 
