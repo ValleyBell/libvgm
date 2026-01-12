@@ -54,6 +54,7 @@ static void ics2115_alloc_rom(void* info, UINT32 memsize);
 static void ics2115_write_rom(void *info, UINT32 offset, UINT32 length, const UINT8* data);
 
 static void ics2115_set_mute_mask(void *info, UINT32 MuteMask);
+static UINT32 ics2115_get_mute_mask(void *info);
 static void ics2115_set_srchg_cb(void *info, DEVCB_SRATE_CHG CallbackFunc, void* DataPtr);
 
 static DEVDEF_RWFUNC devFunc[] =
@@ -330,9 +331,11 @@ static void device_stop_ics2115(void *info)
 
 static void device_reset_ics2115(void *info)
 {
-	int i;
-
 	ics2115_state *chip = (ics2115_state *)info;
+	int i;
+	UINT32 muteMask;
+	
+	muteMask = ics2115_get_mute_mask(chip);
 	chip->irq_enabled = 0;
 	chip->irq_pending = 0;
 	//possible re-suss
@@ -371,6 +374,7 @@ static void device_reset_ics2115(void *info)
 		v->state.on = false;
 		v->state.ramp = 0;
 	}
+	ics2115_set_mute_mask(chip, muteMask);
 	chip->output_rate = ics2115_get_output_rate(chip);
 	if (chip->SmpRateFunc != NULL)
 		chip->SmpRateFunc(chip->SmpRateData, chip->output_rate);
@@ -1307,6 +1311,19 @@ static void ics2115_set_mute_mask(void *info, UINT32 MuteMask)
 		chip->voice[CurChn].Muted = (MuteMask >> CurChn) & 0x01;
 	
 	return;
+}
+
+static UINT32 ics2115_get_mute_mask(void *info)
+{
+	ics2115_state *chip = (ics2115_state *)info;
+	UINT32 muteMask;
+	UINT8 CurChn;
+	
+	muteMask = 0x00000000;
+	for (CurChn = 0; CurChn < 32; CurChn ++)
+		muteMask |= (chip->voice[CurChn].Muted << CurChn);
+	
+	return muteMask;
 }
 
 static void ics2115_set_srchg_cb(void *info, DEVCB_SRATE_CHG CallbackFunc, void* DataPtr)

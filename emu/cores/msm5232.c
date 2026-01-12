@@ -92,7 +92,6 @@ typedef struct {
 
 	// --- TA7630 external volume (0..15, as used by Taito hardware) ---
 	uint8_t ext_vol[MSM5232_EXTVOL_GROUPS]; // [0]=group1 0..3, [1]=group2 4..7
-	double ext_vol_gain[MSM5232_EXTVOL_GROUPS]; // multiplier for output
 
 	UINT8 per_out_vol[MSM5232_NUM_OUTPUTS]; // per-output volume
 	UINT8 Muted[MSM5232_NUM_OUTPUTS];
@@ -273,32 +272,7 @@ static UINT8 device_start_msm5232(const MSM5232_CFG* cfg, DEV_INFO* retDevInf)
 	}
 
     init_tables(chip);
-    for (i = 0; i < MSM5232_NUM_CHANNELS; i++)
-    {
-        init_voice(chip, i);
-    }
     msm5232_set_mute_mask(chip, 0);
-
-    chip->noise_rng = 1;
-	chip->noise_out = 0;
-    chip->noise_cnt = 0;
-    chip->noise_clocks = 0;
-    chip->control1 = chip->control2 = 0;
-    chip->EN_out16[0] = chip->EN_out8[0] = chip->EN_out4[0] = chip->EN_out2[0] = 0;
-    chip->EN_out16[1] = chip->EN_out8[1] = chip->EN_out4[1] = chip->EN_out2[1] = 0;
-
-    // --- TA7630 external volume defaults: max (0x0F) ---
-    chip->ext_vol[0] = 0x0F;
-    chip->ext_vol[1] = 0x0F;
-    chip->ext_vol_gain[0] = chip->vol_ctrl[chip->ext_vol[0]];
-    chip->ext_vol_gain[1] = chip->vol_ctrl[chip->ext_vol[1]];
-
-	// initialize per-output volume (0x80 = 100%)
-	for (i = 0; i < MSM5232_NUM_OUTPUTS; i++)
-	{
-		// enable 0..7 by default, mute 8..10 (not connected in Taito machines)
-		chip->per_out_vol[i] = (i >= 8) ? 0 : 0x80;
-	}
 
     chip->_devData.chipInf = chip;
     INIT_DEVINF(retDevInf, &chip->_devData, chip->sample_rate, &devDef);
@@ -323,13 +297,24 @@ static void device_reset_msm5232(void* info)
         msm5232_write(chip, i, 0x80);
         msm5232_write(chip, i, 0x00);
     }
-    chip->noise_cnt = 0;
     chip->noise_rng = 1;
-	chip->noise_out = 0;
+    chip->noise_out = 0;
+    chip->noise_cnt = 0;
     chip->noise_clocks = 0;
     chip->control1 = chip->control2 = 0;
     chip->EN_out16[0] = chip->EN_out8[0] = chip->EN_out4[0] = chip->EN_out2[0] = 0;
     chip->EN_out16[1] = chip->EN_out8[1] = chip->EN_out4[1] = chip->EN_out2[1] = 0;
+
+    // --- TA7630 external volume defaults: max (0x0F) ---
+    chip->ext_vol[0] = 0x0F;
+    chip->ext_vol[1] = 0x0F;
+
+    // initialize per-output volume (0x80 = 100%)
+    for (i = 0; i < MSM5232_NUM_OUTPUTS; i++)
+    {
+        // enable 0..7 by default, mute 8..10 (not connected in Taito machines)
+        chip->per_out_vol[i] = (i >= 8) ? 0 : 0x80;
+    }
 
     if (chip->SmpRateFunc)
         chip->SmpRateFunc(chip->SmpRateData, chip->sample_rate);
@@ -564,8 +549,8 @@ static void device_update_msm5232(void* info, UINT32 samples, DEV_SMPL** outputs
 		so16 = (group2.solo16 * chip->per_out_vol[9]) >> 7;
 		nout = chip->noise_out * chip->per_out_vol[10];	// is 0 or "maximum volume"
 		mix =
-			(DEV_SMPL)((double)(g1o2 + g1o4 + g1o8 + g1o16) * chip->ext_vol_gain[0]) +
-			(DEV_SMPL)((double)(g2o2 + g2o4 + g2o8 + g2o16) * chip->ext_vol_gain[1]) +
+			(DEV_SMPL)((double)(g1o2 + g1o4 + g1o8 + g1o16) * chip->vol_ctrl[chip->ext_vol[0]]) +
+			(DEV_SMPL)((double)(g2o2 + g2o4 + g2o8 + g2o16) * chip->vol_ctrl[chip->ext_vol[1]]) +
 			(DEV_SMPL)(so8 + so16 + nout);
 
 		outL[i] = mix;
@@ -681,11 +666,9 @@ static void msm5232_write(void* info, UINT8 reg, UINT8 value)
 		// --- TA7630 external volume for MSM5232 ---
 		case 0x1E: // external volume for group 1 (ch 0..3)
 			chip->ext_vol[0] = value & 0x0F;
-			chip->ext_vol_gain[0] = chip->vol_ctrl[value & 0x0F];
 			break;
 		case 0x1F: // external volume for group 2 (ch 4..7)
 			chip->ext_vol[1] = value & 0x0F;
-			chip->ext_vol_gain[1] = chip->vol_ctrl[value & 0x0F];
 			break;
 		case 0x20:	// chip clock, 000000xx
 		case 0x21:	// chip clock, 0000xx00
