@@ -13,6 +13,7 @@ endif()
 project(libvgmMain VERSION 0.1 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 90)
+set(CMAKE_C_EXTENSIONS ON)	# for C++-style comments
 set(CMAKE_CXX_STANDARD 98)
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/libs/cmake_modules/")
