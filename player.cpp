@@ -46,11 +46,17 @@ extern "C" int __cdecl _kbhit(void);
 
 //#define USE_MEMORY_LOADER 1	// define to use the in-memory loader
 
+#if USE_MEMORY_LOADER
+#include "utils/MemoryLoader.h"
+#else
+#include "utils/FileLoader.h"
+#endif
+
 int main(int argc, char* argv[]);
 static void DoChipControlMode(PEBASE* plrEn);
 static void StripNewline(char* str);
 static std::string FCC2Str(UINT32 fcc);
-#ifdef USE_MEMORY_LOADER
+#if USE_MEMORY_LOADER
 static UINT8 *SlurpFile(const char *fileName, UINT32 *fileSize);
 #endif
 static const char* GetFileTitle(const char* filePath);
@@ -156,7 +162,7 @@ int main(int argc, char* argv[])
 	printf("Loading %s ...  ", GetFileTitle(argv[curSong]));
 	fflush(stdout);
 
-#ifdef USE_MEMORY_LOADER
+#if USE_MEMORY_LOADER
 	UINT32 fileSize;
 	UINT8 *fileData = SlurpFile(argv[curSong],&fileSize);
 	dLoad = MemoryLoader_Init(fileData, fileSize);
@@ -512,7 +518,7 @@ int main(int argc, char* argv[])
 	PlayerA_Stop(mainPlr);
 	PlayerA_UnloadFile(mainPlr);
 	DataLoader_Deinit(dLoad);	dLoad = NULL;
-#ifdef USE_MEMORY_LOADER
+#if USE_MEMORY_LOADER
 	free(fileData);
 #endif
 	
@@ -1037,7 +1043,7 @@ static std::string FCC2Str(UINT32 fcc)
 	return std::string(result);
 }
 
-#ifdef USE_MEMORY_LOADER
+#if USE_MEMORY_LOADER
 static UINT8 *SlurpFile(const char *fileName, UINT32 *fileSize)
 {
 	FILE *hFile = fopen(fileName,"rb");

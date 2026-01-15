@@ -676,6 +676,9 @@ target_include_directories(${PROJECT_NAME}
 	PUBLIC $<BUILD_INTERFACE:${LIBVGM_SOURCE_DIR}> $<INSTALL_INTERFACE:${LIBVGM_INSTALL_INCLUDE_DIR}>
 	PRIVATE ${LIBVGM_SOURCE_DIR}/libs/include
 )
+if (CMAKE_COMPILER_IS_GNUCC)
+	target_compile_options(${PROJECT_NAME} PRIVATE "-Wno-unused-function" "-Wno-unused-variable")
+endif()
 
 if(CMAKE_COMPILER_IS_GNUCC OR UNIX)
 	# link Math library
