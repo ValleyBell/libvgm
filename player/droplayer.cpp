@@ -388,11 +388,12 @@ UINT8 DROPlayer::GetSongDeviceInfo(std::vector<PLR_DEV_INFO>& devInfList) const
 	{
 		const DEV_GEN_CFG* devCfg = &_devCfgs[curDev];
 		PLR_DEV_INFO devInf;
-		//memset(&devInf, 0x00, sizeof(PLR_DEV_INFO));
+		memset(&devInf, 0x00, sizeof(PLR_DEV_INFO));
 		
 		devInf.id = (UINT32)curDev;
+		devInf.parentIdx = (UINT32)-1;
 		devInf.type = _devTypes[curDev];
-		devInf.instance = (UINT8)curDev;
+		devInf.instance = (UINT16)curDev;
 		devInf.devCfg = devCfg;
 		if (! _devices.empty())
 		{

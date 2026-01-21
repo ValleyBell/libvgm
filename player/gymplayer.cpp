@@ -411,9 +411,10 @@ UINT8 GYMPlayer::GetSongDeviceInfo(std::vector<PLR_DEV_INFO>& devInfList) const
 	{
 		const DEV_GEN_CFG* devCfg = reinterpret_cast<const DEV_GEN_CFG*>(&_devCfgs[curDev].data[0]);
 		PLR_DEV_INFO devInf;
-		//memset(&devInf, 0x00, sizeof(PLR_DEV_INFO));
+		memset(&devInf, 0x00, sizeof(PLR_DEV_INFO));
 		
 		devInf.id = (UINT32)curDev;
+		devInf.parentIdx = (UINT32)-1;
 		devInf.type = _devCfgs[curDev].type;
 		devInf.instance = 0;
 		devInf.devCfg = devCfg;
