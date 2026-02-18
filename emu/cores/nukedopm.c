@@ -1051,6 +1051,10 @@ static void OPM_OperatorPhase14(opm_t *chip)
     rl = chip->opp ? chip->op_opp_rl : chip->ch_rl[channel];
     chip->op_mixl = fm_algorithm[chip->op_counter][5][chip->op_connect] && (rl & 1) != 0;
     chip->op_mixr = fm_algorithm[chip->op_counter][5][chip->op_connect] && (rl & 2) != 0;
+    if (chip->mute[channel])
+    {
+        chip->op_mixl = chip->op_mixr = 0;
+    }
 }
 
 static void OPM_OperatorPhase15(opm_t *chip)
@@ -2268,15 +2272,180 @@ void OPM_SetIC(opm_t *chip, uint8_t ic)
     }
 }
 
-void OPM_Reset(opm_t *chip, uint32_t flags)
+void OPM_Reset(opm_t* chip, uint32_t rate, uint32_t clock)
 {
     uint32_t i;
     memset(chip, 0, sizeof(opm_t));
-    chip->opp = (flags & opm_flags_ym2164) != 0;
+    chip->clock = clock;
+    chip->smplRate = rate;
     OPM_SetIC(chip, 1);
     for (i = 0; i < 32 * 64; i++)
     {
         OPM_Clock(chip, NULL, NULL, NULL, NULL);
     }
     OPM_SetIC(chip, 0);
+
+    // ratio: sampleRate / (clock / 64) * (1 << resamplerFraction)
+    chip->rateratio = (uint32_t)((((uint64_t)64 * chip->smplRate) << RSM_FRAC) / chip->clock);
+    if (abs(chip->rateratio - (1 << RSM_FRAC)) <= 1)
+        chip->rateratio = (1 << RSM_FRAC);
+}
+
+
+static void OPM_WriteBuffered(opm_t *chip, uint32_t port, uint8_t data)
+{
+    uint64_t time1, time2;
+    int32_t buffer[2];
+    uint64_t skip;
+
+    if (chip->writebuf[chip->writebuf_last].port & 0x02)
+    {
+        OPM_Write(chip, chip->writebuf[chip->writebuf_last].port & 0x01,
+                   chip->writebuf[chip->writebuf_last].data);
+
+        chip->writebuf[chip->writebuf_last].port &= 0x01;
+        chip->writebuf_cur = (chip->writebuf_last + 1) % OPN_WRITEBUF_SIZE;
+        skip = chip->writebuf[chip->writebuf_last].time - chip->writebuf_samplecnt;
+        chip->writebuf_samplecnt = chip->writebuf[chip->writebuf_last].time;
+        while (skip--)
+        {
+            OPM_Clock(chip, buffer, NULL, NULL, NULL);
+        }
+    }
+
+    chip->writebuf[chip->writebuf_last].port = (port & 0x01) | 0x02;
+    chip->writebuf[chip->writebuf_last].data = data;
+    time1 = chip->writebuf_lasttime + OPN_WRITEBUF_DELAY;
+    time2 = chip->writebuf_samplecnt;
+
+    if (time1 < time2)
+    {
+        time1 = time2;
+    }
+
+    chip->writebuf[chip->writebuf_last].time = time1;
+    chip->writebuf_lasttime = time1;
+    chip->writebuf_last = (chip->writebuf_last + 1) % OPN_WRITEBUF_SIZE;
+}
+
+static void OPM_GenerateResampled(opm_t *chip, int32_t *buf)
+{
+    uint32_t i;
+    int32_t buffer[2];
+    
+    while (chip->samplecnt >= chip->rateratio)
+    {
+        chip->oldsamples[0] = chip->samples[0];
+        chip->oldsamples[1] = chip->samples[1];
+        chip->samples[0] = chip->samples[1] = 0;
+        for (i = 0; i < 32; i++)
+        {
+            OPM_Clock(chip, buffer, NULL, NULL, NULL);
+            if (i == 0)
+            {
+                chip->samples[0] += buffer[0];
+                chip->samples[1] += buffer[1];
+            }
+
+            while (chip->writebuf[chip->writebuf_cur].time <= chip->writebuf_samplecnt)
+            {
+                if (!(chip->writebuf[chip->writebuf_cur].port & 0x02))
+                {
+                    break;
+                }
+                chip->writebuf[chip->writebuf_cur].port &= 0x01;
+                OPM_Write(chip, chip->writebuf[chip->writebuf_cur].port,
+                              chip->writebuf[chip->writebuf_cur].data);
+                chip->writebuf_cur = (chip->writebuf_cur + 1) % OPN_WRITEBUF_SIZE;
+            }
+            chip->writebuf_samplecnt++;
+        }
+        chip->samplecnt -= chip->rateratio;
+    }
+    buf[0] = (int32_t)((chip->oldsamples[0] * (chip->rateratio - chip->samplecnt)
+                     + chip->samples[0] * chip->samplecnt) / chip->rateratio);
+    buf[1] = (int32_t)((chip->oldsamples[1] * (chip->rateratio - chip->samplecnt)
+                     + chip->samples[1] * chip->samplecnt) / chip->rateratio);
+    chip->samplecnt += 1 << RSM_FRAC;
+}
+
+static void nukedopm_write(void *chip, UINT8 a, UINT8 v)
+{
+    OPM_WriteBuffered((opm_t *)chip, a, v);
+}
+
+static UINT8 device_start_ym2151_nuked(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
+{
+    opm_t* chip;
+    UINT32 rate;
+    
+    rate = cfg->clock / 64;
+    SRATE_CUSTOM_HIGHEST(cfg->srMode, rate, cfg->smplRate);
+    
+    chip = (opm_t*)calloc(1, sizeof(opm_t));
+    if (chip == NULL)
+        return 0xFF;
+    
+    chip->clock = cfg->clock;
+    chip->smplRate = rate; // save for reset
+    nukedopm_set_mute_mask(chip, 0x00);
+    
+    chip->_devData.chipInf = chip;
+    INIT_DEVINF(retDevInf, &chip->_devData, rate, &devDef_YM2151_Nuked);
+    return 0x00;
+}
+
+static void nukedopm_shutdown(void *chip)
+{
+    free(chip);
+    
+    return;
+}
+
+static void nukedopm_reset_chip(void *chipptr)
+{
+    opm_t *chip = (opm_t *)chipptr;
+    UINT8 chn;
+    DEV_DATA devData;
+    UINT32 mute;
+    
+    devData = chip->_devData;
+    mute = 0;
+    for (chn = 0; chn < 8; chn ++)
+        mute |= (chip->mute[chn] << chn);
+    
+    OPM_Reset(chip, chip->smplRate, chip->clock);
+    
+    chip->_devData = devData;
+    for (chn = 0; chn < 8; chn ++)
+        chip->mute[chn] = (mute >> chn) & 0x01;
+    
+    return;
+}
+
+static void nukedopm_update(void *chipptr, UINT32 samples, DEV_SMPL **out)
+{
+    opm_t *chip = (opm_t *)chipptr;
+    int32_t buffer[2];
+    UINT32 i;
+    
+    for (i = 0; i < samples; i ++)
+    {
+        OPM_GenerateResampled(chip, buffer);
+        out[0][i] = buffer[0];
+        out[1][i] = buffer[1];
+    }
+    
+    return;
+}
+
+static void nukedopm_set_mute_mask(void *chipptr, UINT32 MuteMask)
+{
+    opm_t *chip = (opm_t *)chipptr;
+    UINT8 chn;
+    
+    for (chn = 0; chn < 8; chn ++)
+        chip->mute[chn] = (MuteMask >> chn) & 0x01;
+    
+    return;
 }
