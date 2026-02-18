@@ -1,3 +1,5 @@
+// license:LGPL-2.1+
+// copyright-holders:Nuke.YKT
 /* Nuked OPM
  * Copyright (C) 2020, 2026 Nuke.YKT
  *
@@ -52,7 +54,7 @@ static DEVDEF_RWFUNC devFunc[] =
 };
 DEV_DEF devDef_YM2151_Nuked =
 {
-	"YM2151", "Nuked ", FCC_NUKE,
+	"YM2151", "Nuked OPM", FCC_NUKE,
 	
 	device_start_ym2151_nuked,
 	nukedopm_shutdown,
