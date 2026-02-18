@@ -1,3 +1,5 @@
+// license:LGPL-2.1+
+// copyright-holders:Nuke.YKT
 /* Nuked OPM
  * Copyright (C) 2020, 2026 Nuke.YKT
  *
