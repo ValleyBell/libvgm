@@ -2272,7 +2272,7 @@ void OPM_SetIC(opm_t *chip, uint8_t ic)
     }
 }
 
-void OPM_Reset(opm_t* chip, uint32_t rate, uint32_t clock)
+void OPM_Reset(opm_t *chip, uint32_t rate, uint32_t clock)
 {
     uint32_t i;
     memset(chip, 0, sizeof(opm_t));
