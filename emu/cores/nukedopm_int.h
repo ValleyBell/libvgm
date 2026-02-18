@@ -52,6 +52,10 @@ enum {
 };
 
 typedef struct {
+    DEV_DATA _devData;  // to alias DEV_DATA struct
+    uint32_t clock;
+    uint32_t smplRate;
+
     uint32_t cycles;
     uint8_t ic;
     uint8_t ic2;
@@ -283,6 +287,18 @@ typedef struct {
     uint8_t dac_osh1, dac_osh2;
     uint16_t dac_bits;
     int32_t dac_output[2];
+
+    uint32_t mute[8];
+    int32_t rateratio;
+    int32_t samplecnt;
+    int32_t oldsamples[2];
+    int32_t samples[2];
+
+    uint64_t writebuf_samplecnt;
+    uint32_t writebuf_cur;
+    uint32_t writebuf_last;
+    uint64_t writebuf_lasttime;
+    opm_writebuf writebuf[OPN_WRITEBUF_SIZE];
 } opm_t;
 
 void OPM_Clock(opm_t *chip, int32_t *output, uint8_t *sh1, uint8_t *sh2, uint8_t *so);
@@ -292,10 +308,10 @@ uint8_t OPM_ReadIRQ(opm_t *chip);
 uint8_t OPM_ReadCT1(opm_t *chip);
 uint8_t OPM_ReadCT2(opm_t *chip);
 void OPM_SetIC(opm_t *chip, uint8_t ic);
-void OPM_Reset(opm_t *chip, uint32_t flags);
+void OPM_Reset(opm_t *chip, uint32_t flags, uint32_t rate, uint32_t clock);
 
 #ifdef __cplusplus
 } // extern "C"
 #endif
 
-#endif
+#endif // NUKEDOPM_INT_H
