@@ -1,7 +1,5 @@
-// license:LGPL-2.1+
-// copyright-holders:Nuke.YKT
 /* Nuked OPM
- * Copyright (C) 2020 Nuke.YKT
+ * Copyright (C) 2020, 2026 Nuke.YKT
  *
  * This file is part of Nuked OPM.
  *
@@ -20,10 +18,12 @@
  *
  *  Nuked OPM emulator.
  *  Thanks:
- *      siliconpr0n.org(digshadow, John McMaster):
+ *      John McMaster(siliconpr0n.org):
  *          YM2151 and other FM chip decaps and die shots.
+ *      gtr3qq (https://github.com/gtr3qq):
+ *          YM2164 decap
  *
- * version: 0.9.2 beta
+ * version: 1.0
  */
 #ifndef NUKEDOPM_INT_H
 #define NUKEDOPM_INT_H
@@ -36,24 +36,16 @@
 extern "C" {
 #endif
 
-#define RSM_FRAC 10
-#define OPN_WRITEBUF_SIZE 2048
-#define OPN_WRITEBUF_DELAY 36
+enum {
+    opm_flags_none = 0,
+    opm_flags_ym2164 = 1,   /* YM2164(OPP) */
+};
 
 typedef struct {
-    uint64_t time;
-    uint8_t port;
-    uint8_t data;
-} opm_writebuf;
-
-typedef struct {
-    DEV_DATA _devData;  // to alias DEV_DATA struct
-    uint32_t clock;
-    uint32_t smplRate;
-
     uint32_t cycles;
     uint8_t ic;
     uint8_t ic2;
+    uint8_t opp;
     // IO
     uint8_t write_data;
     uint8_t write_a;
@@ -101,6 +93,7 @@ typedef struct {
     uint8_t eg_rate[2];
     uint8_t eg_sl[2];
     uint8_t eg_tl[3];
+    uint16_t eg_tl_opp;
     uint8_t eg_zr[2];
     uint8_t eg_timershift_lock;
     uint8_t eg_timer_lock;
@@ -136,6 +129,8 @@ typedef struct {
     uint8_t pg_reset[32];
     uint8_t pg_reset_latch[32];
     uint32_t pg_serial;
+    uint8_t pg_opp_pms;
+    uint8_t pg_opp_dt2[32];
 
     // Operator
     uint16_t op_phase_in;
@@ -159,6 +154,8 @@ typedef struct {
     int16_t op_fb[2];
     uint8_t op_mixl;
     uint8_t op_mixr;
+    uint8_t op_opp_rl;
+    uint8_t op_opp_fb[3];
 
     // Mixer
 
@@ -185,7 +182,7 @@ typedef struct {
     uint32_t noise_timer;
     uint8_t noise_timer_of;
     uint8_t noise_update;
-    uint8_t noise_temp;
+    uint8_t noise_bit;
 
     // Register set
     uint8_t mode_test[8];
@@ -220,6 +217,13 @@ typedef struct {
     uint8_t noise_en;
     uint8_t noise_freq;
 
+    // OPP
+    uint8_t ch_ramp_div[8];
+    uint8_t reg_20_delay;
+    uint8_t reg_28_delay;
+    uint8_t reg_30_delay;
+    uint8_t opp_tl_cnt[8];
+    uint16_t opp_tl[32];
 
     // Timer
     uint16_t timer_a_reg;
@@ -269,31 +273,19 @@ typedef struct {
     uint8_t dac_osh1, dac_osh2;
     uint16_t dac_bits;
     int32_t dac_output[2];
-
-    uint32_t mute[8];
-    int32_t rateratio;
-    int32_t samplecnt;
-    int32_t oldsamples[2];
-    int32_t samples[2];
-
-    uint64_t writebuf_samplecnt;
-    uint32_t writebuf_cur;
-    uint32_t writebuf_last;
-    uint64_t writebuf_lasttime;
-    opm_writebuf writebuf[OPN_WRITEBUF_SIZE];
 } opm_t;
 
-void NOPM_Clock(opm_t *chip, int32_t *output, uint8_t *sh1, uint8_t *sh2, uint8_t *so);
-void NOPM_Write(opm_t *chip, uint32_t port, uint8_t data);
-uint8_t NOPM_Read(opm_t *chip, uint32_t port);
-uint8_t NOPM_ReadIRQ(opm_t *chip);
-uint8_t NOPM_ReadCT1(opm_t *chip);
-uint8_t NOPM_ReadCT2(opm_t *chip);
-void NOPM_SetIC(opm_t *chip, uint8_t ic);
-void NOPM_Reset(opm_t* chip, uint32_t rate, uint32_t clock);
+void OPM_Clock(opm_t *chip, int32_t *output, uint8_t *sh1, uint8_t *sh2, uint8_t *so);
+void OPM_Write(opm_t *chip, uint32_t port, uint8_t data);
+uint8_t OPM_Read(opm_t *chip, uint32_t port);
+uint8_t OPM_ReadIRQ(opm_t *chip);
+uint8_t OPM_ReadCT1(opm_t *chip);
+uint8_t OPM_ReadCT2(opm_t *chip);
+void OPM_SetIC(opm_t *chip, uint8_t ic);
+void OPM_Reset(opm_t *chip, uint32_t flags);
 
 #ifdef __cplusplus
 } // extern "C"
 #endif
 
-#endif	// NUKEDOPM_INT_H
+#endif
