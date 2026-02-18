@@ -36,6 +36,16 @@
 extern "C" {
 #endif
 
+#define RSM_FRAC 10
+#define OPN_WRITEBUF_SIZE 2048
+#define OPN_WRITEBUF_DELAY 36
+
+typedef struct {
+    uint64_t time;
+    uint8_t port;
+    uint8_t data;
+} opm_writebuf;
+
 enum {
     opm_flags_none = 0,
     opm_flags_ym2164 = 1,   /* YM2164(OPP) */
