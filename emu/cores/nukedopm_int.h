@@ -310,7 +310,7 @@ uint8_t NOPM_ReadIRQ(opm_t *chip);
 uint8_t NOPM_ReadCT1(opm_t *chip);
 uint8_t NOPM_ReadCT2(opm_t *chip);
 void NOPM_SetIC(opm_t *chip, uint8_t ic);
-void NOPM_Reset(opm_t *chip, uint32_t rate, uint32_t clock);
+void NOPM_Reset(opm_t* chip, uint32_t rate, uint32_t clock);
 
 #ifdef __cplusplus
 } // extern "C"
