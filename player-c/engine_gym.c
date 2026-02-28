@@ -604,10 +604,11 @@ UINT8 GYMEngine_GetSongDeviceInfo(const PE_GYM* self, size_t* retDevInfCount, PL
 	{
 		const DEV_GEN_CFG* devCfg = (DEV_GEN_CFG*)self->devCfgs.data[curDev].data.data;
 		PLR_DEV_INFO* devInf = &(*retDevInfData)[curDev];
-		memset(devInf, 0x00, sizeof(PLR_DEV_INFO));
 		
+		memset(devInf, 0x00, sizeof(PLR_DEV_INFO));
 		devInf->id = (UINT32)curDev;
 		devInf->type = self->devCfgs.data[curDev].type;
+		devInf->parentIdx = (UINT32)-1;
 		devInf->instance = 0;
 		devInf->devCfg = devCfg;
 		if (self->devices.size > 0)

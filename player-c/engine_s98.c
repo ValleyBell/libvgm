@@ -114,7 +114,7 @@ DEFINE_PE_VECTOR(char, VSTR)	// string represented using the VECTOR struct
 struct player_engine_s98
 {
 	PEBASE pe;
-	
+
 	CPCONV* cpcSJIS;	// ShiftJIS -> UTF-8 codepage conversion
 	DEV_LOGGER logger;
 	DATA_LOADER *dLoad;
@@ -180,7 +180,7 @@ const S98_HEADER* S98Engine_GetFileHeader(const PE_S98* self);
 const char* const* S98Engine_GetTags(PE_S98* self);
 UINT8 S98Engine_GetSongInfo(PE_S98* self, PLR_SONG_INFO* songInf);
 UINT8 S98Engine_GetSongDeviceInfo(const PE_S98* self, size_t* retDevInfCount, PLR_DEV_INFO** retDevInfData);
-static UINT8 S98Engine_GetDeviceInstance(const PE_S98* self, size_t id);
+static size_t S98Engine_GetDeviceInstance(const PE_S98* self, size_t id);
 static size_t S98Engine_DeviceID2OptionID(const PE_S98* self, UINT32 id);
 static void S98Engine_RefreshMuting(PE_S98* self, S98_CHIPDEV* chipDev, const PLR_MUTE_OPTS* muteOpts);
 static void S98Engine_RefreshPanning(PE_S98* self, S98_CHIPDEV* chipDev, const PLR_PAN_OPTS* panOpts);
@@ -227,8 +227,12 @@ static UINT32 S98Engine_ReadVarInt(PE_S98* self, UINT32* filePos);
 
 INLINE UINT32 ReadLE32(const UINT8* data)
 {
+#ifdef VGM_LITTLE_ENDIAN
+	return	*(UINT32*)data;
+#else
 	return	(data[0x03] << 24) | (data[0x02] << 16) |
 			(data[0x01] <<  8) | (data[0x00] <<  0);
+#endif
 }
 
 INLINE void SaveDeviceConfig(ARR_UINT8* dst, const void* srcData, size_t srcLen)
@@ -334,6 +338,7 @@ void S98Engine_Deinit(PE_S98* self)
 	if (self->cpcSJIS != NULL)
 		CPConv_Deinit(self->cpcSJIS);
 	PE_ARRAY_FREE(self->devCfgs);
+	PE_ARRAY_FREE(self->devices);
 	PE_ARRAY_FREE(self->devNames);
 
 	FreeStringVectorData(&self->tagMap);
@@ -423,7 +428,7 @@ UINT8 S98Engine_LoadFile(PE_S98* self, DATA_LOADER *dataLoader)
 	}
 	if (self->devHdrs.size == 0)
 	{
-		PE_ARRAY_MALLOC(self->devHdrs, S98_HDR_DEVICE, devCount);
+		PE_ARRAY_MALLOC(self->devHdrs, S98_HDR_DEVICE, 1);
 		curDev = 0;
 		self->devHdrs.data[curDev].devType = S98DEV_OPNA;
 		self->devHdrs.data[curDev].clock = 7987200;
@@ -775,10 +780,9 @@ UINT8 S98Engine_UnloadFile(PE_S98* self)
 	self->fileHdr.dataOfs = 0x00;
 	PE_ARRAY_FREE(self->devHdrs);
 	PE_ARRAY_FREE(self->devices);
+	PE_ARRAY_FREE(self->devCfgs);
 
 	FreeStringVectorData(&self->tagMap);
-	PE_VECTOR_FREE(self->tagMap);
-	PE_VECTOR_FREE(self->tagList);
 	
 	return 0x00;
 }
@@ -820,18 +824,40 @@ UINT8 S98Engine_GetSongDeviceInfo(const PE_S98* self, size_t* retDevInfCount, PL
 		return 0xFF;
 	
 	size_t curDev;
+	size_t diIdx;
 	
+	diIdx = self->devHdrs.size;
+	for (curDev = 0; curDev < self->devHdrs.size; curDev++)
+	{
+		DEV_ID devType = S98_DEV_LIST[self->devHdrs.data[curDev].devType];
+		if (self->devices.size > 0)
+		{
+			diIdx += self->devices.data[curDev].base.defInf.linkDevCount;
+		}
+		else
+		{
+			const DEV_DECL* devDecl = SndEmu_GetDevDecl(devType, self->pe.userDevList, self->pe.devStartOpts);
+			const DEVLINK_IDS* dlIds = devDecl->linkDevIDs((const DEV_GEN_CFG*)self->devCfgs.data[curDev].data.data);
+			if (dlIds != NULL && dlIds->devCount > 0)
+				diIdx += dlIds->devCount;
+		}
+	}
+
 	*retDevInfCount = self->devHdrs.size;
 	*retDevInfData = (PLR_DEV_INFO*)calloc(*retDevInfCount, sizeof(PLR_DEV_INFO));
-	for (curDev = 0; curDev < self->devHdrs.size; curDev ++)
+	for (curDev = 0, diIdx = 0; curDev < self->devHdrs.size; curDev ++)
 	{
 		const S98_HDR_DEVICE* devHdr = &self->devHdrs.data[curDev];
+		size_t diIdxParent = diIdx;
 		PLR_DEV_INFO* devInf = &(*retDevInfData)[curDev];
-		//memset(devInf, 0x00, sizeof(PLR_DEV_INFO));
+		diIdx ++;
 		
+		memset(devInf, 0x00, sizeof(PLR_DEV_INFO));
 		devInf->id = (UINT32)curDev;
+		devInf->parentIdx = (UINT32)-1;
 		devInf->type = S98_DEV_LIST[devHdr->devType];
-		devInf->instance = S98Engine_GetDeviceInstance(self, curDev);
+		devInf->parentIdx = (UINT32)-1;
+		devInf->instance = (UINT16)S98Engine_GetDeviceInstance(self, curDev);
 		devInf->devCfg = (const DEV_GEN_CFG*)self->devCfgs.data[curDev].data.data;
 		if (self->devices.size > 0)
 		{
@@ -844,20 +870,17 @@ UINT8 S98Engine_GetSongDeviceInfo(const PE_S98* self, size_t* retDevInfCount, PL
 			devInf->volume = (cDev->resmpl.volumeL + cDev->resmpl.volumeR) / 2;
 			devInf->smplRate = cDev->defInf.sampleRate;
 			
-			devInf->devLCnt = cDev->defInf.linkDevCount;
-			if (devInf->devLCnt > 0)
-				devInf->devLink = (PLR_DEV_INFO*)calloc(devInf->devLCnt, sizeof(PLR_DEV_INFO));
-			else
-				devInf->devLink = NULL;
 			for (curLDev = 0, clDev = cDev->linkDev; curLDev < cDev->defInf.linkDevCount && clDev != NULL; curLDev ++, clDev = clDev->linkDev)
 			{
 				const DEVLINK_INFO* dLink = &cDev->defInf.linkDevs[curLDev];
-				PLR_DEV_INFO* lDevInf = &devInf->devLink[curLDev];
+				PLR_DEV_INFO* lDevInf = &(*retDevInfData)[diIdx];
+				diIdx ++;
 				
-				//memset(&lDevInf, 0x00, sizeof(PLR_DEV_INFO));
+				memset(lDevInf, 0x00, sizeof(PLR_DEV_INFO));
 				lDevInf->type = dLink->devID;
 				lDevInf->id = (UINT32)curDev;
-				lDevInf->instance = 0xFF;
+				lDevInf->parentIdx = diIdxParent;
+				lDevInf->instance = (UINT16)curLDev;
 				lDevInf->devCfg = dLink->cfg;
 				lDevInf->devDecl = clDev->defInf.devDecl;
 				lDevInf->core = (clDev->defInf.devDef != NULL) ? clDev->defInf.devDef->coreID : 0x00;
@@ -873,22 +896,20 @@ UINT8 S98Engine_GetSongDeviceInfo(const PE_S98* self, size_t* retDevInfCount, PL
 			devInf->volume = 0x100;
 			devInf->smplRate = 0;
 			
-			devInf->devLCnt = 0;
-			devInf->devLink = NULL;
 			dlIds = devInf->devDecl->linkDevIDs(devInf->devCfg);
 			if (dlIds != NULL && dlIds->devCount > 0)
 			{
 				size_t curLDev;
-				devInf->devLCnt = dlIds->devCount;
-				devInf->devLink = (PLR_DEV_INFO*)calloc(devInf->devLCnt, sizeof(PLR_DEV_INFO));
 				for (curLDev = 0; curLDev < dlIds->devCount; curLDev ++)
 				{
-					PLR_DEV_INFO* lDevInf = &devInf->devLink[curLDev];
+					PLR_DEV_INFO* lDevInf = &(*retDevInfData)[diIdx];
+					diIdx ++;
 					
-					//memset(&lDevInf, 0x00, sizeof(PLR_DEV_INFO));
+					memset(lDevInf, 0x00, sizeof(PLR_DEV_INFO));
 					lDevInf->type = dlIds->devIDs[curLDev];
 					lDevInf->id = (UINT32)curDev;
-					lDevInf->instance = 0xFF;
+					lDevInf->parentIdx = diIdxParent;
+					lDevInf->instance = (UINT16)curLDev;
 					lDevInf->devDecl = SndEmu_GetDevDecl(lDevInf->type, self->pe.userDevList, self->pe.devStartOpts);
 					lDevInf->devCfg = NULL;
 					lDevInf->core = 0x00;
@@ -904,7 +925,7 @@ UINT8 S98Engine_GetSongDeviceInfo(const PE_S98* self, size_t* retDevInfCount, PL
 		return 0x00;	// returned data based on file header
 }
 
-static UINT8 S98Engine_GetDeviceInstance(const PE_S98* self, size_t id)
+static size_t S98Engine_GetDeviceInstance(const PE_S98* self, size_t id)
 {
 	const S98_HDR_DEVICE* mainDHdr = &self->devHdrs.data[id];
 	UINT8 mainDType = (mainDHdr->devType < S98DEV_END) ? S98_DEV_LIST[mainDHdr->devType] : 0xFF;
@@ -925,7 +946,7 @@ static UINT8 S98Engine_GetDeviceInstance(const PE_S98* self, size_t id)
 static size_t S98Engine_DeviceID2OptionID(const PE_S98* self, UINT32 id)
 {
 	DEV_ID type;
-	UINT8 instance;
+	size_t instance;
 	
 	if (id & 0x80000000)
 	{
@@ -1180,8 +1201,9 @@ static void S98Engine_GenerateDeviceConfig(PE_S98* self)
 	size_t curDev;
 	
 	PE_ARRAY_FREE(self->devCfgs);
-	PE_ARRAY_MALLOC(self->devCfgs, S98_DEVCFG, self->devHdrs.size);
-	self->devNames.clear();
+	PE_ARRAY_CALLOC(self->devCfgs, S98_DEVCFG, self->devHdrs.size);
+	PE_ARRAY_FREE(self->devNames);
+	PE_ARRAY_MALLOC(self->devNames, const char*, self->devCfgs.size);
 	for (curDev = 0; curDev < self->devCfgs.size; curDev ++)
 	{
 		const S98_HDR_DEVICE* devHdr = &self->devHdrs.data[curDev];
@@ -1240,13 +1262,13 @@ static void S98Engine_GenerateDeviceConfig(PE_S98* self)
 		}
 		if (self->devCfgs.size <= 1)
 		{
-			self->devNames.push_back(devName);
+			self->devNames.data[curDev] = devName;
 		}
 		else
 		{
 			char fullName[0x10];
 			snprintf(fullName, 0x10, "%u-%s", 1 + (unsigned int)curDev, devName);
-			self->devNames.push_back(fullName);
+			self->devNames.data[curDev] = fullName;
 		}
 	}
 	
@@ -1287,7 +1309,7 @@ UINT8 S98Engine_Start(PE_S98* self)
 		VGM_BASEDEV* clDev;
 		PLR_DEV_OPTS* devOpts;
 		DEV_ID deviceID;
-		UINT8 instance;
+		size_t instance;
 		
 		cDev->base.defInf.dataPtr = NULL;
 		cDev->base.defInf.devDef = NULL;
@@ -1519,9 +1541,9 @@ UINT32 S98Engine_Render(PE_S98* self, UINT32 smplCnt, WAVE_32BS* data)
 		if ((UINT32)smplStep > smplCnt - curSmpl)
 			smplStep = smplCnt - curSmpl;
 		
-		for (curDev = 0; curDev < self->devices.size(); curDev ++)
+		for (curDev = 0; curDev < self->devices.size; curDev ++)
 		{
-			S98_CHIPDEV* cDev = &self->devices[curDev];
+			S98_CHIPDEV* cDev = &self->devices.data[curDev];
 			UINT8 disable = (cDev->optID != (size_t)-1) ? self->devOpts[cDev->optID].muteOpts.disable : 0x00;
 			VGM_BASEDEV* clDev;
 			
@@ -1550,7 +1572,7 @@ static void S98Engine_ParseFile(PE_S98* self, UINT32 ticks)
 		return;
 	
 	while(self->fileTick <= self->playTick && ! (self->playState & PLAYSTATE_END))
-		DoCommand();
+		S98Engine_DoCommand(self);
 	
 	return;
 }
@@ -1560,7 +1582,7 @@ static void S98Engine_HandleEOF(PE_S98* self)
 	UINT8 doLoop = (self->fileHdr.loopOfs != 0);
 	
 	if (self->playState & PLAYSTATE_SEEK)	// recalculate playSmpl to fix state when triggering callbacks
-		self->playSmpl = Tick2Sample(self->fileTick);	// Note: fileTick results in more accurate position
+		self->playSmpl = selfcall.Tick2Sample(&self->pe, self->fileTick);	// Note: fileTick results in more accurate position
 	if (doLoop)
 	{
 		if (self->lastLoopTick == self->fileTick)
@@ -1576,17 +1598,17 @@ static void S98Engine_HandleEOF(PE_S98* self)
 	if (doLoop)
 	{
 		self->curLoop ++;
-		if (self->eventCbFunc != NULL)
+		if (self->pe.eventCbFunc != NULL)
 		{
 			UINT8 retVal;
 			
-			retVal = self->eventCbFunc(this, self->eventCbParam, PLREVT_LOOP, &self->curLoop);
+			retVal = self->pe.eventCbFunc(&self->pe, self->pe.eventCbParam, PLREVT_LOOP, &self->curLoop);
 			if (retVal == 0x01)	// "stop" signal?
 			{
 				self->playState |= PLAYSTATE_END;
 				self->psTrigger |= PLAYSTATE_END;
-				if (self->eventCbFunc != NULL)
-					self->eventCbFunc(this, self->eventCbParam, PLREVT_END, NULL);
+				if (self->pe.eventCbFunc != NULL)
+					self->pe.eventCbFunc(&self->pe, self->pe.eventCbParam, PLREVT_END, NULL);
 				return;
 			}
 		}
@@ -1596,8 +1618,8 @@ static void S98Engine_HandleEOF(PE_S98* self)
 	
 	self->playState |= PLAYSTATE_END;
 	self->psTrigger |= PLAYSTATE_END;
-	if (self->eventCbFunc != NULL)
-		self->eventCbFunc(this, self->eventCbParam, PLREVT_END, NULL);
+	if (self->pe.eventCbFunc != NULL)
+		self->pe.eventCbFunc(&self->pe, self->pe.eventCbParam, PLREVT_END, NULL);
 	
 	return;
 }
@@ -1607,11 +1629,11 @@ static void S98Engine_DoCommand(PE_S98* self)
 	if (self->filePos >= DataLoader_GetSize(self->dLoad))
 	{
 		if (self->playState & PLAYSTATE_SEEK)	// recalculate playSmpl to fix state when triggering callbacks
-			self->playSmpl = Tick2Sample(self->fileTick);	// Note: fileTick results in more accurate position
+			self->playSmpl = selfcall.Tick2Sample(&self->pe, self->fileTick);	// Note: fileTick results in more accurate position
 		self->playState |= PLAYSTATE_END;
 		self->psTrigger |= PLAYSTATE_END;
-		if (self->eventCbFunc != NULL)
-			self->eventCbFunc(this, self->eventCbParam, PLREVT_END, NULL);
+		if (self->pe.eventCbFunc != NULL)
+			self->pe.eventCbFunc(&self->pe, self->pe.eventCbParam, PLREVT_END, NULL);
 		emu_logf(&self->logger, PLRLOG_WARN, "S98 file ends early! (filePos 0x%06X, fileSize 0x%06X)\n", self->filePos, DataLoader_GetSize(self->dLoad));
 		return;
 	}
@@ -1626,13 +1648,13 @@ static void S98Engine_DoCommand(PE_S98* self)
 		self->fileTick ++;
 		break;
 	case 0xFE:	// advance multiple ticks
-		self->fileTick += 2 + ReadVarInt(self->filePos);
+		self->fileTick += 2 + S98Engine_ReadVarInt(self, &self->filePos);
 		break;
 	case 0xFD:
-		HandleEOF();
+		S98Engine_HandleEOF(self);
 		break;
 	default:
-		DoRegWrite(curCmd >> 1, curCmd & 0x01, self->fileData[self->filePos + 0x00], self->fileData[self->filePos + 0x01]);
+		S98Engine_DoRegWrite(self, curCmd >> 1, curCmd & 0x01, self->fileData[self->filePos + 0x00], self->fileData[self->filePos + 0x01]);
 		self->filePos += 0x02;
 		break;
 	}
@@ -1642,15 +1664,15 @@ static void S98Engine_DoCommand(PE_S98* self)
 
 static void S98Engine_DoRegWrite(PE_S98* self, UINT8 deviceID, UINT8 port, UINT8 reg, UINT8 data)
 {
-	if (deviceID >= self->devices.size())
+	if (deviceID >= self->devices.size)
 		return;
 	
-	S98_CHIPDEV* cDev = &self->devices[deviceID];
+	S98_CHIPDEV* cDev = &self->devices.data[deviceID];
 	DEV_DATA* dataPtr = cDev->base.defInf.dataPtr;
 	if (dataPtr == NULL || cDev->write == NULL)
 		return;
 	
-	if (self->devHdrs[deviceID].devType == S98DEV_DCSG)
+	if (self->devHdrs.data[deviceID].devType == S98DEV_DCSG)
 	{
 		if (reg == 1)	// GG stereo
 			cDev->write(dataPtr, SN76496_W_GGST, data);

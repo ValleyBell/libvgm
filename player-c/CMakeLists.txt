@@ -8,7 +8,7 @@ set(PLAYER_FILES
 	engine_base.c
 	engine_dro.c
 	engine_gym.c
-	#engine_s98.c
+	engine_s98.c
 	#engine_vgm_cmdhandler.c
 	#engine_vgm.c
 	playera.c
@@ -20,8 +20,8 @@ set(PLAYER_HEADERS
 	engine_base.hpp
 	engine_dro.h
 	engine_gym.h
-	#engine_s98.h
-	#engine_vgm.h
+	engine_s98.h
+	engine_vgm.h
 	playera.h
 )
 set(PLAYER_INCLUDES)

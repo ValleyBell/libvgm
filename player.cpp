@@ -33,7 +33,7 @@ extern "C" int __cdecl _kbhit(void);
 #include "utils/FileLoader.h"
 #include "utils/MemoryLoader.h"
 #include "player-c/engine_base.h"
-//#include "player/s98player.hpp"
+#include "player-c/engine_s98.h"
 #include "player-c/engine_dro.h"
 //#include "player/vgmplayer.hpp"
 #include "player-c/engine_gym.h"
@@ -138,8 +138,8 @@ int main(int argc, char* argv[])
 	
 	// I'll keep the instances of the players for the program's life time.
 	// This way player/chip options are kept between track changes.
-	//PlayerA_RegisterPlayerEngine(mainPlr, new VGMPlayer);
-	//PlayerA_RegisterPlayerEngine(mainPlr, new S98Player);
+	//PlayerA_RegisterPlayerEngine(mainPlr, (PEBASE*)VGMEngine_Create());
+	PlayerA_RegisterPlayerEngine(mainPlr, (PEBASE*)S98Engine_Create());
 	PlayerA_RegisterPlayerEngine(mainPlr, (PEBASE*)DROEngine_Create());
 	PlayerA_RegisterPlayerEngine(mainPlr, (PEBASE*)GYMEngine_Create());
 	PlayerA_SetEventCallback(mainPlr, FilePlayCallback, NULL);

@@ -530,11 +530,12 @@ UINT8 DROEngine_GetSongDeviceInfo(const PE_DRO* self, size_t* retDevInfCount, PL
 	{
 		const DEV_GEN_CFG* devCfg = &self->devCfgs.data[curDev];
 		PLR_DEV_INFO* devInf = &(*retDevInfData)[curDev];
-		memset(devInf, 0x00, sizeof(PLR_DEV_INFO));
 		
+		memset(devInf, 0x00, sizeof(PLR_DEV_INFO));
 		devInf->id = (UINT32)curDev;
+		devInf->parentIdx = (UINT32)-1;
 		devInf->type = self->devTypes[curDev];
-		devInf->instance = (UINT8)curDev;
+		devInf->instance = (UINT16)curDev;
 		devInf->devCfg = devCfg;
 		if (self->devices.size > 0)
 		{
