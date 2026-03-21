@@ -569,8 +569,11 @@ static UINT8 S98Engine_LoadTags(PE_S98* self)
 			memcpy(tagData, startPtr, len);
 			tagData[len] = '\0';
 		}
-		S98Engine_ParsePSFTags(self, tagData);
-		free(tagData);
+		if (tagData != NULL)
+		{
+			S98Engine_ParsePSFTags(self, tagData);
+			free(tagData);
+		}
 	}
 	
 	if (self->tagList.alloc < self->tagMap.size + 1)
@@ -889,7 +892,7 @@ UINT8 S98Engine_GetSongDeviceInfo(const PE_S98* self, size_t* retDevInfCount, PL
 				lDevInf->id = (UINT32)curDev;
 				lDevInf->parentIdx = diIdxParent;
 				lDevInf->instance = (UINT16)curLDev;
-				lDevInf->devLogName = self->devNames.data[curDev];
+				lDevInf->devLogName = devInf->devLogName;
 				lDevInf->devCfg = dLink->cfg;
 				lDevInf->devDecl = clDev->defInf.devDecl;
 				lDevInf->core = (clDev->defInf.devDef != NULL) ? clDev->defInf.devDef->coreID : 0x00;
@@ -920,7 +923,7 @@ UINT8 S98Engine_GetSongDeviceInfo(const PE_S98* self, size_t* retDevInfCount, PL
 					lDevInf->parentIdx = diIdxParent;
 					lDevInf->instance = (UINT16)curLDev;
 					lDevInf->devDecl = SndEmu_GetDevDecl(lDevInf->type, self->pe.userDevList, self->pe.devStartOpts);
-					lDevInf->devLogName = self->devNames.data[curDev];
+					lDevInf->devLogName = devInf->devLogName;
 					lDevInf->devCfg = NULL;
 					lDevInf->core = 0x00;
 					lDevInf->volume = 0xCD;

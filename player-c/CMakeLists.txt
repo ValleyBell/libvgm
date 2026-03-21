@@ -9,8 +9,9 @@ set(PLAYER_FILES
 	engine_dro.c
 	engine_gym.c
 	engine_s98.c
-	#engine_vgm_cmdhandler.c
-	#engine_vgm.c
+	engine_vgm.c
+	engine_vgm-internal.h
+	engine_vgm-commands.c
 	playera.c
 )
 # export headers

@@ -35,7 +35,7 @@ extern "C" int __cdecl _kbhit(void);
 #include "player-c/engine_base.h"
 #include "player-c/engine_s98.h"
 #include "player-c/engine_dro.h"
-//#include "player/vgmplayer.hpp"
+#include "player-c/engine_vgm.h"
 #include "player-c/engine_gym.h"
 #include "player-c/playera.h"
 #include "audio/AudioStream.h"
@@ -138,7 +138,7 @@ int main(int argc, char* argv[])
 	
 	// I'll keep the instances of the players for the program's life time.
 	// This way player/chip options are kept between track changes.
-	//PlayerA_RegisterPlayerEngine(mainPlr, (PEBASE*)VGMEngine_Create());
+	PlayerA_RegisterPlayerEngine(mainPlr, (PEBASE*)VGMEngine_Create());
 	PlayerA_RegisterPlayerEngine(mainPlr, (PEBASE*)S98Engine_Create());
 	PlayerA_RegisterPlayerEngine(mainPlr, (PEBASE*)DROEngine_Create());
 	PlayerA_RegisterPlayerEngine(mainPlr, (PEBASE*)GYMEngine_Create());
@@ -189,11 +189,10 @@ int main(int argc, char* argv[])
 	
 	PEBASE* plrEn = PlayerA_GetPlayer(mainPlr);
 	PlayerA_SetLoopCount(mainPlr, maxLoops);
-#if 0
 	if (plrEn->vtbl.playerType == FCC_S98)
 	{
-		PE_S98* s98play = (PE_S98*)player;
-		const S98_HEADER* s98hdr = s98play->GetFileHeader();
+		PE_S98* s98play = (PE_S98*)plrEn;
+		const S98_HEADER* s98hdr = S98Engine_GetFileHeader(s98play);
 		
 		printf("S98 v%u, Total Length: %.2f s, Loop Length: %.2f s, Tick Rate: %u/%u", s98hdr->fileVer,
 				plrEn->vtbl.Tick2Second(plrEn, plrEn->vtbl.GetTotalTicks(plrEn)), plrEn->vtbl.Tick2Second(plrEn, plrEn->vtbl.GetLoopTicks(plrEn)),
@@ -201,16 +200,14 @@ int main(int argc, char* argv[])
 	}
 	else if (plrEn->vtbl.playerType == FCC_VGM)
 	{
-		PE_VGM* vgmplay = (PE_VGM*)player;
-		const VGM_HEADER* vgmhdr = vgmplay->GetFileHeader();
+		PE_VGM* vgmplay = (PE_VGM*)plrEn;
+		const VGM_HEADER* vgmhdr = VGMEngine_GetFileHeader(vgmplay);
 		
 		printf("VGM v%3X, Total Length: %.2f s, Loop Length: %.2f s", vgmhdr->fileVer,
 				plrEn->vtbl.Tick2Second(plrEn, plrEn->vtbl.GetTotalTicks(plrEn)), plrEn->vtbl.Tick2Second(plrEn, plrEn->vtbl.GetLoopTicks(plrEn)));
-		PlayerA_SetLoopCount(mainPlr, vgmplay->GetModifiedLoopCount(maxLoops));
+		PlayerA_SetLoopCount(mainPlr, VGMEngine_GetModifiedLoopCount(vgmplay, maxLoops));
 	}
-	else
-#endif
-		if (plrEn->vtbl.playerType == FCC_DRO)
+	else if (plrEn->vtbl.playerType == FCC_DRO)
 	{
 		PE_DRO* droplay = (PE_DRO*)plrEn;
 		const DRO_HEADER* drohdr = DROEngine_GetFileHeader(droplay);

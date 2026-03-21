@@ -510,6 +510,8 @@ static void GYMEngine_LoadTag(PE_GYM* self, const char* tagName, const void* dat
 	if (endPtr == NULL)
 		endPtr = startPtr + maxlen;
 	utf8Str = GYMEngine_GetUTF8String(self, startPtr, endPtr);
+	if (utf8Str == NULL || utf8Str[0] == '\0')	// skip empty tags
+		return;
 
 	self->tagData.data[self->tagData.size] = utf8Str;
 	self->tagData.size ++;
