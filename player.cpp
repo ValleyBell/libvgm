@@ -338,6 +338,7 @@ int main(int argc, char* argv[])
 			const PLR_DEV_INFO& pdi = diList[curDev];
 			const char* devName = "";
 			UINT16 chns = 0;
+			//devName = pdi.devLogName;	// show device names as used by logging calls
 			if (pdi.devDecl != NULL)
 			{
 				devName = pdi.devDecl->name(pdi.devCfg);
@@ -359,6 +360,7 @@ int main(int argc, char* argv[])
 					pdi.devCfg->clock, pdi.smplRate, pdi.volume, chns);
 			}
 		}
+		free(diList);
 	}
 #if 0
 	const std::vector<VGMPlayer::DACSTRM_DEV>* vgmPcmStrms = NULL;

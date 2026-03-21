@@ -213,7 +213,7 @@ void GYMEngine_Init(PE_GYM* self)
 	PBaseEngine_Init(&self->pe);
 	
 	self->decFData.data = NULL;
-	self->devCfgs.data = NULL;
+	self->devCfgs.data = NULL;	self->devCfgs.size = 0;
 	self->devices.data = NULL;
 	self->devNames.data = NULL;
 	self->pcmBuffer.data = NULL;
@@ -251,6 +251,8 @@ void GYMEngine_Init(PE_GYM* self)
 
 void GYMEngine_Deinit(PE_GYM* self)
 {
+	size_t curDev;
+
 	self->pe.eventCbFunc = NULL;	// prevent any callbacks during destruction
 	
 	if (self->playState & PLAYSTATE_PLAY)
@@ -259,6 +261,9 @@ void GYMEngine_Deinit(PE_GYM* self)
 	
 	if (self->cpc1252 != NULL)
 		CPConv_Deinit(self->cpc1252);
+
+	for (curDev = 0; curDev < self->devCfgs.size; curDev ++)
+		PE_ARRAY_FREE(self->devCfgs.data[curDev].data);
 	PE_ARRAY_FREE(self->devCfgs);
 	PE_ARRAY_FREE(self->devNames);
 
@@ -610,6 +615,7 @@ UINT8 GYMEngine_GetSongDeviceInfo(const PE_GYM* self, size_t* retDevInfCount, PL
 		devInf->type = self->devCfgs.data[curDev].type;
 		devInf->parentIdx = (UINT32)-1;
 		devInf->instance = 0;
+		devInf->devLogName = self->devNames.data[curDev];
 		devInf->devCfg = devCfg;
 		if (self->devices.size > 0)
 		{

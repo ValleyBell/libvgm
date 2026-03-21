@@ -141,6 +141,7 @@ void PlayerA_Destroy(PLAYERA* self)
 void PlayerA_Init(PLAYERA* self)
 {
 	PE_VECTOR_ALLOC(self->avbPlrs, PEBASE*, 4)
+	self->smplBuf.data = 0;
 
 	self->config.masterVol = 0x10000;	// fixed point 16.16
 	self->config.ignoreVolGain = 0;
@@ -176,6 +177,7 @@ void PlayerA_Deinit(PLAYERA* self)
 	PlayerA_Stop(self);
 	PlayerA_UnloadFile(self);
 	PlayerA_UnregisterAllPlayers(self);
+	PE_ARRAY_FREE(self->smplBuf);
 	return;
 }
 

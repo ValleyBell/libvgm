@@ -536,6 +536,7 @@ UINT8 DROEngine_GetSongDeviceInfo(const PE_DRO* self, size_t* retDevInfCount, PL
 		devInf->parentIdx = (UINT32)-1;
 		devInf->type = self->devTypes[curDev];
 		devInf->instance = (UINT16)curDev;
+		devInf->devLogName = self->devNames.data[curDev];
 		devInf->devCfg = devCfg;
 		if (self->devices.size > 0)
 		{

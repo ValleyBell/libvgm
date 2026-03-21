@@ -77,6 +77,7 @@ typedef struct player_device_info
 	UINT16 volume;		// output volume (0x100 = 100%)
 	UINT32 core;		// FCC of device emulation core
 	UINT32 smplRate;	// current sample rate (0 if not running)
+	const char* devLogName;		// device name in log output
 	const DEV_DECL* devDecl;	// device declaration
 	const DEV_GEN_CFG* devCfg;	// device configuration parameters
 } PLR_DEV_INFO;

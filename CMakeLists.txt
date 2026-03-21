@@ -140,7 +140,7 @@ option(USE_SANITIZERS "use sanitizers" ON)
 # --- main library ---
 add_subdirectory(utils)
 if(USE_SANITIZERS)
-	add_sanitizers(utils)
+	add_sanitizers(vgm-utils)
 endif(USE_SANITIZERS)
 
 if(BUILD_LIBAUDIO)
