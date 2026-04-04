@@ -283,9 +283,9 @@ protected:
 	
 	enum
 	{
-		_HDR_BUF_SIZE = 0x100,
-		_OPT_DEV_COUNT = 0x30,
-		_CHIP_COUNT = 0x30,
+		_HDR_BUF_SIZE = 0x200,
+		_OPT_DEV_COUNT = 0x34,
+		_CHIP_COUNT = 0x34,
 		_PCM_BANK_COUNT = 0x40
 	};
 	
@@ -338,7 +338,7 @@ protected:
 	//PLAYER_FILEREQ_CB _fileReqCbFunc;
 	//void* _fileReqCbParam;
 	
-	static const DEV_ID _OPT_DEV_LIST[_OPT_DEV_COUNT];	// list of configurable libvgm devices (different from VGM chip list]
+	static const DEV_ID _OPT_DEV_LIST[_OPT_DEV_COUNT];	// list of configurable libvgm devices (different from VGM chip list)
 	static const DEV_ID _DEV_LIST[_CHIP_COUNT];	// VGM chip ID -> libvgm device ID
 	static const UINT32 _CHIPCLK_OFS[_CHIP_COUNT];	// file offsets for chip clocks in VGM header
 	static const UINT16 _CHIP_VOLUME[_CHIP_COUNT];	// default volume for chips
