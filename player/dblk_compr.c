@@ -729,6 +729,9 @@ void ReadPCMComprTable(UINT32 dataSize, const UINT8* data, PCM_COMPR_TBL* comprT
 	UINT8 valSize;
 	UINT32 tblSize;
 	
+	if (dataSize < 0x06)
+		return;	// don't try to access elements when there is no data
+	
 	comprTbl->comprType = data[0x00];
 	comprTbl->cmpSubType = data[0x01];
 	comprTbl->bitsDec = data[0x02];
