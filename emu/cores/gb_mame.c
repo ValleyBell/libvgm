@@ -63,7 +63,8 @@ TODO:
 #include "../snddef.h"
 #include "../EmuHelper.h"
 #include "../RatioCntr.h"
-#include "gb.h"
+#include "gbintf.h"
+#include "gb_mame.h"
 
 
 static UINT8 gb_wave_r(void *chip, UINT8 offset);
@@ -89,7 +90,7 @@ static DEVDEF_RWFUNC devFunc[] =
 	{RWF_CHN_MUTE | RWF_WRITE, DEVRW_ALL, 0, gameboy_sound_set_mute_mask},
 	{0x00, 0x00, 0, NULL}
 };
-static DEV_DEF devDef =
+DEV_DEF devDef_GB_MAME =
 {
 	"GameBoy DMG", "MAME", FCC_MAME,
 	
@@ -106,44 +107,6 @@ static DEV_DEF devDef =
 	NULL,	// LinkDevice
 	
 	devFunc,	// rwFuncs
-};
-
-static const char* DeviceName(const DEV_GEN_CFG* devCfg)
-{
-	return "GameBoy DMG";
-}
-
-#define DEV_CHN_COUNT	4
-static UINT16 DeviceChannels(const DEV_GEN_CFG* devCfg)
-{
-	return DEV_CHN_COUNT;
-}
-
-static const char** DeviceChannelNames(const DEV_GEN_CFG* devCfg)
-{
-	static const char* names[DEV_CHN_COUNT] =
-	{
-		"Square 1", "Square 2", "Wave", "Noise",
-	};
-	return names;
-}
-
-static const DEVLINK_IDS* DeviceLinkIDs(const DEV_GEN_CFG* devCfg)
-{
-	return NULL;
-}
-
-const DEV_DECL sndDev_GB_DMG =
-{
-	DEVID_GB_DMG,
-	DeviceName,
-	DeviceChannels,
-	DeviceChannelNames,
-	DeviceLinkIDs,
-	{	// cores
-		&devDef,
-		NULL
-	}
 };
 
 
@@ -279,7 +242,6 @@ struct _gb_sound_t
 	RATIO_CNTR cycleCntr;
 
 	UINT8 gbMode;
-	UINT8 BoostWaveChn;
 	UINT8 NoWaveCorrupt;
 	UINT8 LegacyMode;
 };
@@ -1019,8 +981,7 @@ static void gb_update_wave_channel(gb_sound_t *gb, struct SOUND *snd, UINT32 cyc
 				}
 				snd->current_sample &= 0x0f;
 				snd->current_sample -= 8;	// make bipolar
-				if (gb->BoostWaveChn)
-					snd->current_sample <<= 1;
+				snd->current_sample <<= 1;
 
 				// Reload frequency counter
 				snd->frequency_counter = snd->frequency;
@@ -1220,12 +1181,11 @@ static UINT8 device_start_gameboy_sound(const DEV_GEN_CFG* cfg, DEV_INFO* retDev
 	RC_SET_RATIO(&gb->cycleCntr, cfg->clock, gb->rate);
 
 	gameboy_sound_set_mute_mask(gb, 0x00);
-	gb->BoostWaveChn = 0x00;
 	gb->NoWaveCorrupt = 0x00;
 	gb->LegacyMode = 0x00;
 
 	gb->_devData.chipInf = gb;
-	INIT_DEVINF(retDevInf, &gb->_devData, gb->rate, &devDef);
+	INIT_DEVINF(retDevInf, &gb->_devData, gb->rate, &devDef_GB_MAME);
 
 	return 0x00;
 }
@@ -1337,7 +1297,6 @@ static void gameboy_sound_set_options(void *chip, UINT32 Flags)
 {
 	gb_sound_t *gb = (gb_sound_t *)chip;
 	
-	gb->BoostWaveChn = (Flags & 0x01) >> 0;
 	gb->NoWaveCorrupt = (Flags & 0x02) >> 1;
 	gb->LegacyMode = (Flags & 0x80) >> 7;
 	

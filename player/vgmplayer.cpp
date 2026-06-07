@@ -18,7 +18,7 @@
 #include "../emu/cores/2612intf.h"
 #include "../emu/cores/segapcm.h"		// for SEGAPCM_CFG
 #include "../emu/cores/ayintf.h"		// for AY8910_CFG
-#include "../emu/cores/gb.h"
+#include "../emu/cores/gbintf.h"
 #include "../emu/cores/okim6258.h"		// for MSM6258_CFG
 #include "../emu/cores/k054539.h"
 #include "../emu/cores/c140.h"
@@ -694,8 +694,6 @@ void VGMPlayer::RefreshDevOptions(CHIP_DEVICE& chipDev, const PLR_DEV_OPTS& devO
 		if (_p2612Fix & P2612FIX_ACTIVE)
 			coreOpts |= OPT_YM2612_LEGACY_MODE;	// enable legacy mode
 	}
-	else if (chipType == DEVID_GB_DMG)
-		coreOpts |= OPT_GB_DMG_LEGACY_MODE;	// enable legacy mode (fix playback of old VGMs)
 	else if (chipType == DEVID_QSOUND)
 		coreOpts |= OPT_QSOUND_NOWAIT;	// make sure seeking works
 	

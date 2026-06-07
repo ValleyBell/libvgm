@@ -102,7 +102,7 @@
 #include "cores/ayintf.h"
 #endif
 #ifdef SNDDEV_GAMEBOY
-#include "cores/gb.h"
+#include "cores/gbintf.h"
 #endif
 #ifdef SNDDEV_NES_APU
 #include "cores/nesintf.h"
