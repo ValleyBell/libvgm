@@ -218,10 +218,12 @@ static void compute_tables(void) {
 
 INLINE UINT32 get_prescaler(msm5205_state *info) {
     if (info->is_msm6585) {
+        // prescalers: 160, 80, 40, 20
         return (info->prescaler & PIN_S1) ? 
             ((info->prescaler & PIN_S2) ? 20 : 80) : 
             ((info->prescaler & PIN_S2) ? 40 : 160);
     } else {
+        // prescalers: 96, 64, 48, 1
         return (info->prescaler & PIN_S1) ? 
             ((info->prescaler & PIN_S2) ? 1/* Slave mode */ : 64) : 
             ((info->prescaler & PIN_S2) ? 48 : 96);
