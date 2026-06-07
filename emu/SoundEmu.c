@@ -56,6 +56,10 @@
 #define SNDDEV_MSM5232
 #define SNDDEV_BSMT2000
 #define SNDDEV_ICS2115
+#define SNDDEV_NAMCOWSG
+#define SNDDEV_NAMCOC15
+#define SNDDEV_NAMCOC30
+#define SNDDEV_NAMCOPPW
 #define SNDDEV_YM2414
 #endif
 
@@ -190,6 +194,18 @@
 #endif
 #ifdef SNDDEV_ICS2115
 #include "cores/ics2115.h"
+#endif
+#ifdef SNDDEV_NAMCOWSG
+#include "cores/namcowsg.h"
+#endif
+#ifdef SNDDEV_NAMCOC15
+#include "cores/namcoc15.h"
+#endif
+#ifdef SNDDEV_NAMCOC30
+#include "cores/namcoc30.h"
+#endif
+#ifdef SNDDEV_NAMCOPPW
+#include "cores/namcoppw.h"
 #endif
 #ifdef SNDDEV_YM2414
 #include "cores/ymfmintf.h"
@@ -339,6 +355,18 @@ const DEV_DECL* sndEmu_Devices[] = {
 #endif
 #ifdef SNDDEV_ICS2115
 	&sndDev_ICS2115,
+#endif
+#ifdef SNDDEV_NAMCOWSG
+	&sndDev_NAMCOWSG,
+#endif
+#ifdef SNDDEV_NAMCOC15
+	&sndDev_NAMCOC15,
+#endif
+#ifdef SNDDEV_NAMCOC30
+	&sndDev_NAMCOC30,
+#endif
+#ifdef SNDDEV_NAMCOPPW
+	&sndDev_NAMCOPPW,
 #endif
 #ifdef SNDDEV_YM2414
 	&sndDev_YM2414,

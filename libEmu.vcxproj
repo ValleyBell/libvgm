@@ -188,6 +188,10 @@
     <ClCompile Include="emu\cores\msm5205.c" />
     <ClCompile Include="emu\cores\msm5232.c" />
     <ClCompile Include="emu\cores\multipcm.c" />
+    <ClCompile Include="emu\cores\namcoc15.c" />
+    <ClCompile Include="emu\cores\namcoc30.c" />
+    <ClCompile Include="emu\cores\namcoppw.c" />
+    <ClCompile Include="emu\cores\namcowsg.c" />
     <ClCompile Include="emu\cores\nesintf.c" />
     <ClCompile Include="emu\cores\nes_apu.c" />
     <ClCompile Include="emu\cores\np_nes_apu.c" />
@@ -280,6 +284,10 @@
     <ClInclude Include="emu\cores\msm5205.h" />
     <ClInclude Include="emu\cores\msm5232.h" />
     <ClInclude Include="emu\cores\multipcm.h" />
+    <ClInclude Include="emu\cores\namcoc15.h" />
+    <ClInclude Include="emu\cores\namcoc30.h" />
+    <ClInclude Include="emu\cores\namcoppw.h" />
+    <ClInclude Include="emu\cores\namcowsg.h" />
     <ClInclude Include="emu\cores\nesintf.h" />
     <ClInclude Include="emu\cores\nes_apu.h" />
     <ClInclude Include="emu\cores\nes_defs.h" />

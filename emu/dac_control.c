@@ -188,6 +188,10 @@ INLINE void daccontrol_SendCommand(dac_control* chip)
 	case DEVID_MIKEY:
 	case DEVID_MSM5205:
 	case DEVID_ICS2115:	// TODO: Verify
+	case DEVID_NAMCOWSG: // TODO: Verify
+	case DEVID_NAMCOC15: // TODO: Verify
+	case DEVID_NAMCOC30: // TODO: Verify
+	case DEVID_NAMCOPPW: // TODO: Verify
 		if (chip->Write.A8D8 == NULL)
 			return;
 		Command = (chip->DstCommand & 0x00FF) >> 0;
