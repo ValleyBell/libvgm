@@ -18,7 +18,7 @@
 #include "../emu/cores/2612intf.h"
 #include "../emu/cores/segapcm.h"		// for SEGAPCM_CFG
 #include "../emu/cores/ayintf.h"		// for AY8910_CFG
-#include "../emu/cores/gb.h"
+#include "../emu/cores/gbintf.h"
 #include "../emu/cores/okim6258.h"		// for MSM6258_CFG
 #include "../emu/cores/k054539.h"
 #include "../emu/cores/c140.h"
@@ -161,6 +161,7 @@ VGMPlayer::VGMPlayer() :
 
 	_lastTsMult = 0;
 	_lastTsDiv = 0;
+	_opl4YRW801Req = 0x00;
 	
 	for (optChip = 0x00; optChip < 0x100; optChip ++)
 	{
@@ -366,6 +367,10 @@ UINT8 VGMPlayer::ParseHeader(void)
 		}
 	}
 	
+	_opl4YRW801Req = 0x00;
+	if (GetChipCount(0x0D))	// YMF278B / OPL4
+		ParseFileForOPL4ROMRequirement();
+	
 	return 0x00;
 }
 
@@ -501,6 +506,7 @@ UINT8 VGMPlayer::UnloadFile(void)
 	_fileData = NULL;
 	_fileHdr.fileVer = 0xFFFFFFFF;
 	_fileHdr.dataOfs = 0x00;
+	_opl4YRW801Req = 0x00;
 	_devNames.clear();
 	_devices.clear();
 	_devCfgs.clear();
@@ -694,8 +700,6 @@ void VGMPlayer::RefreshDevOptions(CHIP_DEVICE& chipDev, const PLR_DEV_OPTS& devO
 		if (_p2612Fix & P2612FIX_ACTIVE)
 			coreOpts |= OPT_YM2612_LEGACY_MODE;	// enable legacy mode
 	}
-	else if (chipType == DEVID_GB_DMG)
-		coreOpts |= OPT_GB_DMG_LEGACY_MODE;	// enable legacy mode (fix playback of old VGMs)
 	else if (chipType == DEVID_QSOUND)
 		coreOpts |= OPT_QSOUND_NOWAIT;	// make sure seeking works
 	
@@ -1533,7 +1537,8 @@ void VGMPlayer::InitDevices(void)
 			SndEmu_GetDeviceFunc(devInf->devDef, RWF_MEMORY | RWF_WRITE, DEVRW_BLOCK, 0x524F, (void**)&chipDev.romWrite);
 			SndEmu_GetDeviceFunc(devInf->devDef, RWF_MEMORY | RWF_WRITE, DEVRW_MEMSIZE, 0x5241, (void**)&chipDev.romSizeB);
 			SndEmu_GetDeviceFunc(devInf->devDef, RWF_MEMORY | RWF_WRITE, DEVRW_BLOCK, 0x5241, (void**)&chipDev.romWriteB);
-			LoadOPL4ROM(&chipDev);
+			if (_opl4YRW801Req & (1 << chipID))
+				LoadOPL4ROM(&chipDev);
 			break;
 		case DEVID_32X_PWM:
 			retVal = SndEmu_Start2(chipType, devCfg, devInf, _userDevList, _devStartOpts);
@@ -1785,20 +1790,129 @@ VGMPlayer::CHIP_DEVICE* VGMPlayer::GetDevicePtr(UINT8 chipType, UINT8 chipID)
 	return &_devices[devID];
 }
 
+void VGMPlayer::ParseFileForOPL4ROMRequirement(void)
+{
+	UINT32 filePos = _fileHdr.dataOfs;
+	UINT8 yrwUse = 0x00;
+	UINT8 fileRom = 0x00;
+	UINT8 waveTblHdr[2] = {0x00, 0x00};
+	UINT16 slotWave[2][24];
+	UINT8 stopScan = 0x00;
+	memset(slotWave, 0x00, sizeof(slotWave));
+	
+	while(filePos < _fileHdr.dataEnd && ! stopScan)
+	{
+		UINT8 curCmd = _fileData[filePos];
+		
+		switch(curCmd)
+		{
+		case 0x66:	// end of command data
+			stopScan = 0x01;
+			break;
+		case 0x67:	// data block
+			if (filePos + 0x07 > _fileHdr.dataEnd)
+			{
+				stopScan = 0x01;
+				break;
+			}
+			{
+				UINT8 dblkType = _fileData[filePos + 0x02];
+				UINT32 dblkLenRaw = ReadLE32(&_fileData[filePos + 0x03]);
+				UINT32 dblkLen = dblkLenRaw & 0x7FFFFFFF;
+				if (dblkType == 0x84)	// YMF278B ROM
+					fileRom |= 1 << (dblkLenRaw >> 31);
+				if (dblkLen > _fileHdr.dataEnd - filePos - 0x07)
+				{
+					stopScan = 0x01;
+					break;
+				}
+				filePos += 0x07 + dblkLen;
+			}
+			break;
+		case 0xD0:	// YMF278B register write
+			if (filePos + _CMD_INFO[curCmd].cmdLen > _fileHdr.dataEnd)
+			{
+				stopScan = 0x01;
+				break;
+			}
+			{
+				UINT8 chipID = (_fileData[filePos + 0x01] & 0x80) >> 7;
+				UINT8 port = _fileData[filePos + 0x01] & 0x7F;
+				UINT8 reg = _fileData[filePos + 0x02];
+				UINT8 data = _fileData[filePos + 0x03];
+				
+				if (port == 0x02)
+				{
+					if (reg == 0x02)
+					{
+						waveTblHdr[chipID] = (data >> 2) & 0x07;
+					}
+					else if (reg >= 0x08 && reg <= 0xF7)
+					{
+						UINT8 slot = (reg - 0x08) % 24;
+						UINT8 regGrp = (reg - 0x08) / 24;
+						
+						if (regGrp == 0x00)
+						{
+							slotWave[chipID][slot] = (slotWave[chipID][slot] & 0x100) | data;
+							if (slotWave[chipID][slot] < 384 || ! waveTblHdr[chipID])
+								yrwUse |= 1 << chipID;
+						}
+						else if (regGrp == 0x01)
+						{
+							slotWave[chipID][slot] = (slotWave[chipID][slot] & 0x0FF) | ((data & 0x01) << 8);
+						}
+						else if (regGrp == 0x04 && (data & 0x80))
+						{
+							if (slotWave[chipID][slot] < 384 || ! waveTblHdr[chipID])
+								yrwUse |= 1 << chipID;
+						}
+					}
+				}
+				filePos += _CMD_INFO[curCmd].cmdLen;
+			}
+			break;
+		default:
+			if (_CMD_INFO[curCmd].cmdLen == 0)
+			{
+				stopScan = 0x01;
+				break;
+			}
+			if (filePos + _CMD_INFO[curCmd].cmdLen > _fileHdr.dataEnd)
+			{
+				stopScan = 0x01;
+				break;
+			}
+			filePos += _CMD_INFO[curCmd].cmdLen;
+			break;
+		}
+	}
+	
+	_opl4YRW801Req = yrwUse & ~fileRom;
+	return;
+}
+
 void VGMPlayer::LoadOPL4ROM(CHIP_DEVICE* chipDev)
 {
 	static const char* romFile = "yrw801.rom";
 	
 	if (chipDev->romWrite == NULL)
 		return;
+	emu_logf(&_logger, PLRLOG_DEBUG, "OPL4 requires external sample ROM %s.\n", romFile);
 	
 	if (_yrwRom.empty())
 	{
 		if (_fileReqCbFunc == NULL)
+		{
+			emu_logf(&_logger, PLRLOG_WARN, "No file request callback available for %s.\n", romFile);
 			return;
+		}
 		DATA_LOADER* romDLoad = _fileReqCbFunc(_fileReqCbParam, this, romFile);
 		if (romDLoad == NULL)
+		{
+			emu_logf(&_logger, PLRLOG_WARN, "Couldn't load %s.\n", romFile);
 			return;
+		}
 		DataLoader_ReadAll(romDLoad);
 		
 		UINT32 yrwSize = DataLoader_GetSize(romDLoad);
@@ -1808,7 +1922,10 @@ void VGMPlayer::LoadOPL4ROM(CHIP_DEVICE* chipDev)
 		DataLoader_Deinit(romDLoad);
 	}
 	if (_yrwRom.empty())
+	{
+		emu_logf(&_logger, PLRLOG_WARN, "Couldn't load %s.\n", romFile);
 		return;
+	}
 	
 	if (chipDev->romSize != NULL)
 		chipDev->romSize(chipDev->base.defInf.dataPtr, (UINT32)_yrwRom.size());

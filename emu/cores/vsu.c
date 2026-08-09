@@ -304,7 +304,10 @@ static void VSU_Write(void* info, UINT16 A, UINT8 V)
 				chip->Frequency[ch] |= V << 0;
 				chip->EffFreq[ch] &= 0xFF00;
 				chip->EffFreq[ch] |= V << 0;
-				chip->ModLock = 1;
+				if (ch == 4)
+				{
+					chip->ModLock = 1;
+				}
 				break;
 
 			case 0x3:
@@ -312,7 +315,10 @@ static void VSU_Write(void* info, UINT16 A, UINT8 V)
 				chip->Frequency[ch] |= (V & 0x7) << 8;
 				chip->EffFreq[ch] &= 0x00FF;
 				chip->EffFreq[ch] |= (V & 0x7) << 8;
-				chip->ModLock = 2;
+				if (ch == 4)
+				{
+					chip->ModLock = 2;
+				}
 				break;
 
 			case 0x4:

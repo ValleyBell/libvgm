@@ -724,6 +724,8 @@ void VGMPlayer::Cmd_DataBlock(void)
 			
 			pcmBnk->bankOfs.push_back(oldLen);
 			pcmBnk->bankSize.push_back(dataLen);
+			if (!dataLen)
+				return;	// don't try to access std::vector elements when there is no data
 			
 			pcmBnk->data.resize(oldLen + dataLen);
 			if (dblkType & 0x40)
@@ -751,6 +753,8 @@ void VGMPlayer::Cmd_DataBlock(void)
 		if (cDev == NULL)
 			break;
 		
+		if (dblkLen < 0x08)
+			return;
 		memSize = ReadLE32(&fData[0x00]);
 		dataOfs = ReadLE32(&fData[0x04]);
 		dataPtr = &fData[0x08];
@@ -780,6 +784,8 @@ void VGMPlayer::Cmd_DataBlock(void)
 		
 		if (! (dblkType & 0x20))
 		{
+			if (dblkLen < 0x02)
+				return;
 			// C0..DF: 16-bit addressing
 			dataOfs = ReadLE16(&fData[0x00]);
 			dataLen = dblkLen - 0x02;
@@ -787,6 +793,8 @@ void VGMPlayer::Cmd_DataBlock(void)
 		}
 		else
 		{
+			if (dblkLen < 0x04)
+				return;
 			// E0..FF: 32-bit addressing
 			dataOfs = ReadLE32(&fData[0x00]);
 			dataLen = dblkLen - 0x04;

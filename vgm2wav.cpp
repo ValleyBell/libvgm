@@ -89,6 +89,9 @@ scan_uint(const char *str);
 static const char *
 fmt_time(double ts);
 
+static DATA_LOADER*
+request_file_callback(void* userParam, PlayerBase* player, const char* fileName);
+
 static const char *
 extensible_guid_trailer= "\x00\x00\x00\x00\x10\x00\x80\x00\x00\xAA\x00\x38\x9B\x71";
 
@@ -229,6 +232,7 @@ int main(int argc, const char *argv[]) {
     player.RegisterPlayerEngine(new S98Player);
     player.RegisterPlayerEngine(new DROPlayer);
     player.RegisterPlayerEngine(new GYMPlayer);
+    player.SetFileReqCallback(request_file_callback, NULL);
 
     /* setup the player's output parameters and allocate internal buffers */
     if (player.SetOutputSettings(sample_rate, 2, bit_depth, BUFFER_LEN)) {
@@ -474,6 +478,22 @@ fmt_time(double sec) {
     snprintf(&ts[strlen(ts)],7,"%02u.%03u",i_sec, (unsigned int)((sec - (unsigned int)sec) * 1000));
 
     return (const char *)ts;
+}
+
+static DATA_LOADER*
+request_file_callback(void* userParam, PlayerBase* player, const char* fileName) {
+    DATA_LOADER* loader = FileLoader_Init(fileName);
+    UINT8 retVal;
+
+    if (loader == NULL) {
+        return NULL;
+    }
+    retVal = DataLoader_Load(loader);
+    if (! retVal) {
+        return loader;
+    }
+    DataLoader_Deinit(loader);
+    return NULL;
 }
 
 static void FCC2STR(char *str, UINT32 fcc) {
