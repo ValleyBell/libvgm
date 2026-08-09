@@ -288,7 +288,7 @@ static UINT8 device_start_ics2115(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 	//This seems to give the ok fit but it is not good enough.
 	/*double maxvol = ((1 << VOLUME_BITS) - 1) * pow(2., (double)1/0x100);
 	for (int i = 0; i < 0x1000; i++)
-		   chip->volume[i] = floor(maxvol * pow(2.,(double)i/256 - 16) + 0.5);
+			chip->volume[i] = floor(maxvol * pow(2.,(double)i/256 - 16) + 0.5);
 	*/
 
 	//austere's table, derived from patent 5809466:
