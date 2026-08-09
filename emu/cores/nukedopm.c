@@ -330,7 +330,7 @@ static int32_t OPM_LFOApplyPMS(int32_t lfo, int32_t pms)
     {
         top >>= 1;
     }
-    t = (top & 6) == 6 || ((top & 3) == 3 && pms >= 6);
+    t = ((top & 6) == 6 && pms == 7) || ((top & 3) == 3 && pms >= 6);
 
     out = top + ((top >> 2) & 1) + t;
     out = out * 2 + ((lfo >> 4) & 1);
@@ -394,7 +394,7 @@ static int32_t OPM_CalcKCode(int32_t kcf, int32_t lfo, int32_t lfo_sign, int32_t
     {
         sum += 64;
     }
-    if (!lfo_sign && !cr)
+    if (!lfo_sign && !cr && (lfo & 192) != 0)
     {
         sum += (-64)&8191;
         negoverflow = 1;
@@ -1577,7 +1577,7 @@ static void OPM_DoLFO1(opm_t *chip)
 
     chip->lfo_counter3_clock = (chip->cycles & 15) == 13 && chip->lfo_counter2_of_lock2;
 
-    if ((chip->cycles & 15) == 15)
+    if ((chip->cycles & 15) == 15 && (chip->lfo_bit_counter & 7) == 0)
     {
         chip->lfo_trig_sign = (chip->lfo_val & 0x80) != 0;
         chip->lfo_saw_sign = (chip->lfo_val & 0x100) != 0;
