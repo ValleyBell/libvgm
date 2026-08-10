@@ -1,21 +1,22 @@
 // license:BSD-3-Clause
 // copyright-holders:Alex Marshall, nimitz, austere
 /*
-    ICS2115 by Raiden II team (c) 2010
-    members: austere, nimitz, Alex Marshal
+	ICS2115 by Raiden II team (c) 2010
+	members: austere, nimitz, Alex Marshal
 
-    Original driver by O. Galibert, ElSemi
+	Original driver by O. Galibert, ElSemi
 
-    Use tab size = 4 for your viewing pleasure.
+	Use tab size = 4 for your viewing pleasure.
 
-    TODO:
-    - Verify BYTE/ROMEN pin behavior
-    - DRAM, DMA, MIDI interface is unimplemented
-    - Verify interrupt, envelope, timer period
-    - Verify unemulated registers
+	TODO:
+	- Verify BYTE/ROMEN pin behavior
+	- DRAM, DMA, MIDI interface is unimplemented
+	- Verify interrupt, envelope, timer period
+	- Verify unemulated registers
 
 */
 
+#include <math.h> // for round() and pow()
 #include <stdlib.h>
 #include <string.h>	// for memset
 #include <stddef.h>	// for NULL
@@ -32,8 +33,7 @@
 // ======================> ics2115_device
 
 #define REVISION 0x1
-#define VOLUME_BITS 15
-#define RAMP_SHIFT 6
+//#define VOLUME_BITS 15
 //pan law level
 //log2(256*128) = 15 for -3db + 1 must be confirmed by real hardware owners
 #define PAN_LEVEL 16
@@ -133,7 +133,7 @@ typedef struct {
 
 	struct {
 		INT32 left;
-		UINT32 acc, start, end; // address counters (20.9 fixed point)
+		INT32 acc, start, end; // address counters (20.9 fixed point)
 		UINT16 fc;              // frequency (6.9 fixed point)
 		UINT8 ctl, saddr;
 	} osc;
@@ -182,7 +182,6 @@ typedef struct {
 	// may lead to its elimination.
 	struct {
 		bool on;
-		int ramp;       // 100 0000 = 0x40 maximum
 	} state;
 
 	UINT16 regs[0x20]; // channel registers
@@ -235,10 +234,10 @@ struct _ics2115_state
 	UINT16 regs[0x40]; // global registers
 
 	/*
-	    Unknown variable, seems to be effected by 0x12. Further investigation
-	    Required.
+		Unknown variable, seems to be effected by 0x12. Further investigation
+		Required.
 	*/
-	UINT8 vmode;
+	UINT32 volinc_frac[32];
 };
 
 // internal register helper functions
@@ -289,14 +288,32 @@ static UINT8 device_start_ics2115(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 	//This seems to give the ok fit but it is not good enough.
 	/*double maxvol = ((1 << VOLUME_BITS) - 1) * pow(2., (double)1/0x100);
 	for (int i = 0; i < 0x1000; i++)
-	       chip->volume[i] = floor(maxvol * pow(2.,(double)i/256 - 16) + 0.5);
+			chip->volume[i] = floor(maxvol * pow(2.,(double)i/256 - 16) + 0.5);
 	*/
 
 	//austere's table, derived from patent 5809466:
 	//See section V starting from page 195
 	//Subsection F (column 124, page 198) onwards
-	for (i = 0; i<4096; i++)
+	/*
+	for (int i = 0; i<4096; i++)
 		chip->volume[i] = ((0x100 | (i & 0xff)) << (VOLUME_BITS-9)) >> (15 - (i>>8));
+	*/
+
+	// hardware measured formula
+	// exp = i[11:8]
+	// mant = i[7:0]
+	// exp == 0 : mant >> 7
+	// exp > 0 : ceil(((0x100 | mant) << exp) / 512)
+	UINT8 exponent, mantissa;
+	for (i = 0; i < 4096; i++)
+	{
+		exponent = i >> 8;
+		mantissa = i & 0xff;
+		if (exponent == 0)
+			chip->volume[i] = mantissa >> 7;
+		else
+			chip->volume[i] = (((0x100 | mantissa) << (exponent - 1)) + 0xff) >> 8;
+	}
 
 	//u-Law table as per MIL-STD-188-113
 	lut_initial = 33 << 2;   //shift up 2-bits for 16-bit range.
@@ -312,6 +329,14 @@ static UINT8 device_start_ics2115(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 		chip->panlaw[i] = PAN_LEVEL - (31 - count_leading_zeros_32(i)); //chip->panlaw[i] = PAN_LEVEL - log2(i)
 	}
 	chip->panlaw[0] = 0xfff; //all bits to one when no pan
+
+	// exponential volume increment fraction calculation
+	// round(1024*2^(frac/32))
+	for (i = 0; i < 32; i++)
+	{
+		chip->volinc_frac[i] = (UINT16)(round(1024.0 * pow(2.0, (double)(i) / 32.0)));
+	}
+
 	return 0x00;
 }
 
@@ -342,7 +367,6 @@ static void device_reset_ics2115(void *info)
 	chip->active_osc = 31;
 	chip->osc_select = 0;
 	chip->reg_select = 0;
-	chip->vmode = 0;
 	chip->irq_on = false;
 	memset(chip->voice, 0, sizeof(chip->voice));
 	/*
@@ -372,7 +396,6 @@ static void device_reset_ics2115(void *info)
 		v->vol_ctrl.value = 1;
 		v->vol.mode = 0;
 		v->state.on = false;
-		v->state.ramp = 0;
 	}
 	ics2115_set_mute_mask(chip, muteMask);
 	chip->output_rate = ics2115_get_output_rate(chip);
@@ -387,12 +410,7 @@ static void keyon(ics2115_state *chip)
 #ifdef ICS2115_ISOLATE
 	if (chip->osc_select != ICS2115_ISOLATE)
 		return;
-#endif
-	//set initial condition (may need to invert?) -- does NOT work since these are set to zero even
-	//no ramp up...
-	chip->voice[chip->osc_select].state.ramp = 0x40;
 
-#ifdef ICS2115_DEBUG
 	logerror("[%02d vs:%04x ve:%04x va:%04x vi:%02x vc:%02x os:%06x oe:%06x oa:%06x of:%04x SA:%02x oc:%02x][%04x]\n", chip->osc_select,
 			chip->voice[chip->osc_select].vol.start >> 10,
 			chip->voice[chip->osc_select].vol.end >> 10,
@@ -405,11 +423,11 @@ static void keyon(ics2115_state *chip)
 			chip->voice[chip->osc_select].osc.fc,
 			chip->voice[chip->osc_select].osc.saddr,
 			chip->voice[chip->osc_select].osc_conf.value,
-			m_volume[(chip->voice[chip->osc_select].vol.acc >> 14)]
+			chip->volume[(chip->voice[chip->osc_select].vol.acc >> 14)]
 			);
 #endif
 	//testing memory corruption issue with mame stream
-	//logerror("m_volume[0x%x]=0x%x\n", mastervolume, m_volume[mastervolume]);
+	//logerror("chip->volume[0x%x]=0x%x\n", mastervolume, chip->volume[mastervolume]);
 }
 
 static void recalc_irq(ics2115_state *chip)
@@ -427,23 +445,23 @@ static void recalc_irq(ics2115_state *chip)
 }
 
 /*
-    Using next-state logic from column 126 of patent 5809466.
-    VOL(L) = vol.acc
-    VINC = vol.inc
-    DIR = invert
-    BC = boundary cross (start or end )
-    BLEN = bi directional loop enable
-    LEN loop enable
-    UVOL   LEN   BLEN    DIR     BC      Next VOL(L)
-    0      x     x       x       x       VOL(L) // no change no vol envelope
-    1      x     x       0       0       VOL(L) + VINC // forward dir no bc
-    1      x     x       1       0       VOL(L) - VINC // invert no bc
-    1      0     x       x       1       VOL(L) // no env len no vol envelope
+	Using next-state logic from column 126 of patent 5809466.
+	VOL(L) = vol.acc
+	VINC = vol.inc
+	DIR = invert
+	BC = boundary cross (start or end )
+	BLEN = bi directional loop enable
+	LEN loop enable
+	UVOL   LEN   BLEN    DIR     BC      Next VOL(L)
+	0      x     x       x       x       VOL(L) // no change no vol envelope
+	1      x     x       0       0       VOL(L) + VINC // forward dir no bc
+	1      x     x       1       0       VOL(L) - VINC // invert no bc
+	1      0     x       x       1       VOL(L) // no env len no vol envelope
    ----------------------------------------------------------------------------
-    1      1     0       0       1       start - ( end - (VOL(L)  + VINC) )
-    1      1     0       1       1       end + ( (VOL(L) - VINC) - start)
-    1      1     1       0       1       end + (end - (VOL(L) + VINC) ) // here
-    1      1     1       1       1       start - ( (VOL(L) - VINC)- start)
+	1      1     0       0       1       start - ( end - (VOL(L)  + VINC) )
+	1      1     0       1       1       end + ( (VOL(L) - VINC) - start)
+	1      1     1       0       1       end + (end - (VOL(L) + VINC) ) // here
+	1      1     1       1       1       start - ( (VOL(L) - VINC)- start)
 */
 static int update_volume_envelope(ics2115_voice *voice)
 {
@@ -510,15 +528,15 @@ static int update_volume_envelope(ics2115_voice *voice)
 
 /*UINT32 ics2115_device::ics2115_voice::next_address()
 {
-    //Patent 6,246,774 B1, Column 111, Row 25
-    //LEN   BLEN    DIR     BC      NextAddress
-    //x     x       0       0       add+fc
-    //x     x       1       0       add-fc
-    //0     x       x       1       add
-    //1     0       0       1       start-(end-(add+fc))
-    //1     0       1       1       end+((add+fc)-start)
-    //1     1       0       1       end+(end-(add+fc))
-    //1     1       1       1       start-((add-fc)-start)
+	//Patent 6,246,774 B1, Column 111, Row 25
+	//LEN   BLEN    DIR     BC      NextAddress
+	//x     x       0       0       add+fc
+	//x     x       1       0       add-fc
+	//0     x       x       1       add
+	//1     0       0       1       start-(end-(add+fc))
+	//1     0       1       1       end+((add+fc)-start)
+	//1     1       0       1       end+(end-(add+fc))
+	//1     1       1       1       start-((add-fc)-start)
 
 }*/
 
@@ -582,7 +600,7 @@ static INT32 get_sample(ics2115_state *chip, ics2115_voice *voice)
 {
 	UINT32 curaddr = voice->osc.acc >> 12;
 	UINT32 nextaddr;
-	INT16 sample1, sample2;
+	INT32 sample1, sample2;
 	INT32 diff;
 	UINT16 fract;
 
@@ -630,39 +648,35 @@ static bool playing(ics2115_voice *voice)
 	return voice->state.on && !(voice->osc_conf.bitflags.stop);
 }
 
-static void update_ramp(ics2115_voice *voice)
-{
-	//slow attack
-	if (voice->state.on && !voice->osc_conf.bitflags.stop)
-	{
-		if (voice->state.ramp < 0x40)
-			voice->state.ramp += 0x1;
-		else
-			voice->state.ramp = 0x40;
-	}
-	//slow release
-	else
-	{
-		if (voice->state.ramp)
-			voice->state.ramp -= 0x1;
-	}
-}
-
 static UINT8 fill_output(ics2115_state *chip, ics2115_voice *voice, UINT32 samples, INT32 *loutput, INT32 *routput)
 {
 	UINT32 i;
 	UINT8 irq_invalid = 0;
-	UINT16 fine = 1 << (3 * (voice->vol.incr >> 6));
-	voice->vol.add = (voice->vol.incr & 0x3f) << (10 - fine);
+	UINT16 e;
+	// measured from hardware
+	switch (voice->vol.mode & 0x3)
+	{
+		case 0x0:
+		case 0x1:
+		case 0x3: // Exponential
+		{
+			e = voice->vol.incr + ((voice->vol.mode & 1) ? 256 : 0);
+			voice->vol.add = (chip->volinc_frac[e & 0x1f] << (e >> 5)) >> 10;
+			break;
+		}
+		case 0x2: // Linear
+			voice->vol.add = voice->vol.incr << 10;
+			break;
+	}
 
 	for (i = 0; i < samples; i++)
 	{
-		UINT32 volacc = (voice->vol.acc >> 14) & 0xfff;
-		INT16 vlefti = volacc - chip->panlaw[255 - voice->vol.pan]; // left index from acc - pan law
-		INT16 vrighti = volacc - chip->panlaw[voice->vol.pan]; // right index from acc - pan law
+		INT32 volacc = (voice->vol.acc >> 14) & 0xfff;
+		INT32 vlefti = volacc - chip->panlaw[255 - voice->vol.pan]; // left index from acc - pan law
+		INT32 vrighti = volacc - chip->panlaw[voice->vol.pan]; // right index from acc - pan law
 		//check negative values so no cracks, is it a hardware feature ?
-		UINT16 vleft = vlefti > 0 ? (chip->volume[vlefti] * voice->state.ramp >> RAMP_SHIFT) : 0;
-		UINT16 vright = vrighti > 0 ? (chip->volume[vrighti] * voice->state.ramp >> RAMP_SHIFT) : 0;
+		INT32 vleft = (vlefti > 0) ? chip->volume[vlefti] : 0;
+		INT32 vright = (vrighti > 0) ? chip->volume[vrighti] : 0;
 
 		//From GUS doc:
 		//In general, it is necessary to remember that all voices are being summed in to the
@@ -673,13 +687,12 @@ static UINT8 fill_output(ics2115_state *chip, ics2115_voice *voice, UINT32 sampl
 
 		//15-bit volume + (5-bit worth of 32 channel sum) + 16-bit samples = 4-bit extra
 		//if (playing(voice))
-		if ((!chip->vmode || playing(voice)) && (!voice->Muted))
+		if (playing(voice) && (!voice->Muted))
 		{
-			loutput[i] += (sample * vleft) >> (5 + VOLUME_BITS);
-			routput[i] += (sample * vright) >> (5 + VOLUME_BITS);
+			loutput[i] += (sample * vleft) >> 15;
+			routput[i] += (sample * vright) >> 15;
 		}
 
-		update_ramp(voice);
 		if (playing(voice))
 		{
 			if (update_oscillator(voice))
@@ -712,10 +725,10 @@ static void ics2115_update(void *param, UINT32 samples, DEV_SMPL **outputs)
 			continue;
 #endif
 /*
-#ifdef ICS2115_DEBUG
-        UINT32 curaddr = ((voice->osc.saddr << 20) & 0xffffff) | (voice->osc.acc >> 12);
-        INT32 sample = get_sample(voice);
-        logerror("[%06x=%04x]", curaddr, (INT16)sample);
+#if 0
+		UINT32 curaddr = ((voice->osc.saddr << 20) & 0xffffff) | (voice->osc.acc >> 12);
+		INT32 sample = get_sample(voice);
+		logerror("[%06x=%04x]", curaddr, (INT16)sample);
 #endif
 */
 		if (fill_output(chip, voice, samples, outputs[0], outputs[1]))
@@ -735,9 +748,9 @@ static void ics2115_update(void *param, UINT32 samples, DEV_SMPL **outputs)
 			double average = 0;
 			for (int i = 0; i < samples; i++)
 			{
-			    if (outputs[0][i] > max) max = outputs[0][i];
-			    if (outputs[0][i] < min) min = outputs[0][i];
-			    average += fabs(outputs[0][i]);
+				if (outputs[0][i] > max) max = outputs[0][i];
+				if (outputs[0][i] < min) min = outputs[0][i];
+				average += fabs(outputs[0][i]);
 			}
 			average /= samples;
 			average /= 1 << 16;
@@ -833,22 +846,21 @@ static UINT16 reg_read(ics2115_state *chip)
 
 		/* DDP3 code (trap15's reversal) */
 		/* 0xA13's work:
-		    res = read() & 0xC3;
-		    if (!(res & 2)) res |= 1;
-		    e = d = res;
+			res = read() & 0xC3;
+			if (!(res & 2)) res |= 1;
+			e = d = res;
 		*/
 		/* 0xA4F's work:
-		    while(!(read() & 1))
+			while(!(read() & 1))
 		*/
 		case 0x0d: // [osc] Volume Envelope Control
 			//ret = v->Vol.Ctl | ((v->state & FLAG_STATE_VOLIRQ) ? 0x81 : 1);
 			// may expect |8 on voice irq with &40 == 0
 			// may expect |8 on reg 0 on voice irq with &80 == 0
 			// ret = 0xff;
-			if (!chip->vmode)
-				ret = voice->vol_ctrl.bitflags.irq ? 0x81 : 0x01;
-			else
-				ret = 0x01;
+			ret |= 0x01;
+			if (voice->vol_ctrl.bitflags.irq)
+				ret |= 0x80;
 			//ret = voice->vol_ctrl.bitflags.value | 0x1;
 			ret <<= 8;
 			break;
@@ -1090,12 +1102,9 @@ static void reg_write(ics2115_state *chip, UINT16 data, UINT16 mem_mask)
 					if (!voice->osc_conf.bitflags.stop || !voice->vol_ctrl.bitflags.stop)
 						logerror("[%02d STOP]\n", chip->osc_select);
 #endif
-					if (!chip->vmode)
-					{
-						//try to key it off as well!
-						voice->osc_conf.bitflags.stop = true;
-						voice->vol_ctrl.bitflags.stop = true;
-					}
+					//try to key it off as well!
+					voice->osc_conf.bitflags.stop = true;
+					voice->vol_ctrl.bitflags.stop = true;
 				}
 #ifdef ICS2115_DEBUG
 				else
@@ -1112,7 +1121,7 @@ static void reg_write(ics2115_state *chip, UINT16 data, UINT16 mem_mask)
 		case 0x12:
 			//Could be per voice! -- investigate.
 			if (ACCESSING_BITS_8_15)
-				chip->vmode = (data >> 8);
+				voice->vol.mode = (data >> 8);
 			break;
 		case 0x40: // Timer 1 Preset
 		case 0x41: // Timer 2 Preset
@@ -1260,7 +1269,7 @@ TIMER_CALLBACK_MEMBER( ics2115_device::timer_cb_1 )
 static void recalc_timer(ics2115_state *chip, int timer)
 {
 	UINT64 period  = ((chip->timer[timer].scale & 0x1f) + 1) * (chip->timer[timer].preset + 1);
-	period = period << (4 + (chip->timer[timer].scale >> 5));
+	period <<= (4 + (chip->timer[timer].scale >> 5));
 
 	if (chip->timer[timer].period != period)
 	{

@@ -1117,6 +1117,8 @@ static UINT8 FilePlayCallback(PlayerBase* player, void* userParam, UINT8 evtType
 static DATA_LOADER* RequestFileCallback(void* userParam, PlayerBase* player, const char* fileName)
 {
 	DATA_LOADER* dLoad = FileLoader_Init(fileName);
+	if (dLoad == NULL)
+		return NULL;
 	UINT8 retVal = DataLoader_Load(dLoad);
 	if (! retVal)
 		return dLoad;
