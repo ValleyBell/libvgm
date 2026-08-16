@@ -158,6 +158,11 @@ static void selectPOPCNT(void)
 
 #define CNT_MAX (INT64_MAX & ~15)
 
+#define MIKEY_TIMER_STAGE_COUNT 4
+#define MIKEY_AUDIO_STAGE_COUNT 4
+#define MIKEY_AUDIO_STAGE_BASE  MIKEY_TIMER_STAGE_COUNT
+#define MIKEY_STAGE_COUNT       ( MIKEY_TIMER_STAGE_COUNT + MIKEY_AUDIO_STAGE_COUNT )
+
 static int32_t clamp_i32( int32_t v, int32_t lo, int32_t hi )
 {
   return v < lo ? lo : ( v > hi ? hi : v );
@@ -168,46 +173,56 @@ static int64_t min_i64( int64_t v1, int64_t v2 )
   return v1 > v2 ? v2 : v1;
 }
 
-static int64_t clamp0_i64( int64_t v )
-{
-  return v > 0 ? v : 0;
-}
-
 // mikey_timer_t::CONTROLA : uint8_t
 #define TMR_CTRLA_RESET_DONE      0x40  // 0b01000000
 #define TMR_CTRLA_ENABLE_RELOAD   0x10  // 0b00010000
 #define TMR_CTRLA_ENABLE_COUNT    0x08  // 0b00001000
 #define TMR_CTRLA_AUD_CLOCK_MASK  0x07  // 0b00000111
+#define TMR_CTRLA_LINKED_CLOCK    0x07  // 0b00000111
 // mikey_timer_t::CONTROLB : uint8_t
+#define TMR_CTRLB_BORROW_OUT      0x01  // 0b00000001
+#define TMR_CTRLB_BORROW_IN       0x02  // 0b00000010
+#define TMR_CTRLB_LAST_CLOCK      0x04  // 0b00000100
 #define TMR_CTRLB_TIMER_DONE      0x08  // 0b00001000
 
 // mikey_timer_t
 typedef struct
 {
-  int64_t mValueUpdateTick;
+  int64_t mStatusClearTick;
   int mAudShift;
+  uint32_t mPendingClocks;
   bool mEnableReload;
   bool mEnableCount;
+  bool mLinked;
   bool mResetDone;
   bool mTimerDone;
   uint8_t mBackup;
+  uint8_t mControlA;
+  uint8_t mControlB;
   uint8_t mValue;
 } mikey_timer_t;
 
-static void mikey_timer_updateValue( mikey_timer_t* timer, int64_t tick );
 static int64_t mikey_timer_computeTriggerTime( mikey_timer_t* timer, int64_t tick );
 static int64_t mikey_timer_computeAction( mikey_timer_t* timer, int64_t tick );
+static bool mikey_timer_borrowIn( mikey_timer_t* timer );
+static bool mikey_timer_clock( mikey_timer_t* timer );
+static void mikey_timer_clearStatus( mikey_timer_t* timer, int64_t tick );
+static void mikey_timer_scheduleStatusClear( mikey_timer_t* timer, int64_t tick );
 
 // mikey_timer_t public:
 static void mikey_timer_Timer( mikey_timer_t* timer )
 {
-  timer->mValueUpdateTick = 0;
+  timer->mStatusClearTick = CNT_MAX;
   timer->mAudShift = 0;
+  timer->mPendingClocks = 0;
   timer->mEnableReload = false;
   timer->mEnableCount = false;
+  timer->mLinked = false;
   timer->mResetDone = false;
   timer->mTimerDone = false;
   timer->mBackup = 0;
+  timer->mControlA = 0;
+  timer->mControlB = 0;
   timer->mValue = 0;
 }
 
@@ -219,36 +234,50 @@ static int64_t mikey_timer_setBackup( mikey_timer_t* timer, int64_t tick, uint8_
 
 static int64_t mikey_timer_setControlA( mikey_timer_t* timer, int64_t tick, uint8_t controlA )
 {
-  mikey_timer_updateValue( timer, tick );
+  int oldAudShift = timer->mAudShift;
+  bool oldEnableCount = timer->mEnableCount;
+
+  timer->mControlA = controlA;
   timer->mResetDone = ( controlA & TMR_CTRLA_RESET_DONE ) != 0;
   timer->mEnableReload = ( controlA & TMR_CTRLA_ENABLE_RELOAD ) != 0;
   timer->mEnableCount = ( controlA & TMR_CTRLA_ENABLE_COUNT ) != 0;
   timer->mAudShift = controlA & TMR_CTRLA_AUD_CLOCK_MASK;
+  timer->mLinked = timer->mAudShift == TMR_CTRLA_LINKED_CLOCK;
+
+  if ( oldAudShift != timer->mAudShift || ( ! oldEnableCount && timer->mEnableCount ) )
+    timer->mPendingClocks = 0;
 
   if ( timer->mResetDone )
+  {
     timer->mTimerDone = false;
+    timer->mControlB &= ~TMR_CTRLB_TIMER_DONE;
+  }
 
   return mikey_timer_computeAction( timer, tick );
 }
 
 static int64_t mikey_timer_setCount( mikey_timer_t* timer, int64_t tick, uint8_t value )
 {
-  mikey_timer_updateValue( timer, tick );
   timer->mValue = value;
-  timer->mValueUpdateTick = tick;
   return mikey_timer_computeTriggerTime( timer, tick );
 }
 
-static int64_t mikey_timer_setControlB( mikey_timer_t* timer, int64_t tick, uint8_t controlB )
+static int64_t mikey_timer_setControlB( mikey_timer_t* timer, int64_t tick, uint8_t controlB, bool* borrowOut )
 {
+  mikey_timer_clearStatus( timer, tick );
+  *borrowOut = false;
+  if ( ( timer->mControlB & TMR_CTRLB_BORROW_IN ) == 0 && ( controlB & TMR_CTRLB_BORROW_IN ) != 0 )
+    *borrowOut = mikey_timer_borrowIn( timer );
+
+  timer->mControlB = controlB & TMR_CTRLB_TIMER_DONE;
   timer->mTimerDone = ( controlB & TMR_CTRLB_TIMER_DONE ) != 0;
+  timer->mStatusClearTick = CNT_MAX;
   return mikey_timer_computeAction( timer, tick );
 }
 
-static int64_t mikey_timer_fireAction( mikey_timer_t* timer, int64_t tick )
+static int64_t mikey_timer_fireAction( mikey_timer_t* timer, int64_t tick, bool* borrowOut )
 {
-  mikey_timer_updateValue( timer, tick );
-  timer->mTimerDone = true;
+  *borrowOut = mikey_timer_clock( timer );
 
   return mikey_timer_computeAction( timer, tick );
 }
@@ -258,35 +287,73 @@ static uint8_t mikey_timer_getBackup( const mikey_timer_t* timer )
   return timer->mBackup;
 }
 
-static uint8_t mikey_timer_getCount( mikey_timer_t* timer, int64_t tick )
+static uint8_t mikey_timer_getCount( const mikey_timer_t* timer )
 {
-  mikey_timer_updateValue( timer, tick );
   return timer->mValue;
 }
 
 //mikey_timer_t private:
-static uint64_t mikey_timer_scaleDiff( const mikey_timer_t* timer, uint64_t older, uint64_t newer )
+static bool mikey_timer_borrowIn( mikey_timer_t* timer )
 {
-  uint64_t const mask = ~(uint64_t)0 << ( timer->mAudShift + 4 );
-  return ( ( newer & mask ) - ( older & mask ) ) >> ( timer->mAudShift + 4 );
+  if ( timer->mValue > 0 )
+  {
+    timer->mValue --;
+    if ( ! timer->mLinked )
+      timer->mControlB &= ~TMR_CTRLB_LAST_CLOCK;
+    return false;
+  }
+
+  timer->mControlB |= TMR_CTRLB_BORROW_OUT;
+  if ( ! timer->mLinked )
+    timer->mControlB |= TMR_CTRLB_LAST_CLOCK;
+  timer->mControlB |= TMR_CTRLB_TIMER_DONE;
+  timer->mTimerDone = true;
+  if ( timer->mEnableReload )
+    timer->mValue = timer->mBackup;
+
+  return true;
 }
 
-static void mikey_timer_updateValue( mikey_timer_t* timer, int64_t tick )
+static bool mikey_timer_clock( mikey_timer_t* timer )
 {
-  if ( timer->mEnableCount && ( timer->mEnableReload || ! timer->mTimerDone ) )
+  timer->mControlB &= ~( TMR_CTRLB_BORROW_OUT | TMR_CTRLB_BORROW_IN );
+
+  if ( timer->mResetDone )
   {
-    int64_t const scaledDiff = ( int64_t )mikey_timer_scaleDiff( timer, ( uint64_t )timer->mValueUpdateTick, ( uint64_t )tick );
-    timer->mValue = ( uint8_t )clamp0_i64( ( int64_t )timer->mValue - scaledDiff );
+    timer->mControlB &= ~TMR_CTRLB_TIMER_DONE;
+    timer->mTimerDone = false;
   }
-  timer->mValueUpdateTick = tick;
+
+  if ( ! timer->mEnableReload && timer->mTimerDone )
+    return false;
+
+  timer->mControlB |= TMR_CTRLB_BORROW_IN;
+  return mikey_timer_borrowIn( timer );
+}
+
+static void mikey_timer_clearStatus( mikey_timer_t* timer, int64_t tick )
+{
+  if ( tick >= timer->mStatusClearTick )
+  {
+    timer->mControlB &= ~( TMR_CTRLB_BORROW_OUT | TMR_CTRLB_BORROW_IN );
+    timer->mStatusClearTick = CNT_MAX;
+  }
+}
+
+static void mikey_timer_scheduleStatusClear( mikey_timer_t* timer, int64_t tick )
+{
+  if ( ( timer->mControlB & ( TMR_CTRLB_BORROW_OUT | TMR_CTRLB_BORROW_IN ) ) != 0 )
+    timer->mStatusClearTick = tick;
+  else
+    timer->mStatusClearTick = CNT_MAX;
 }
 
 static int64_t mikey_timer_computeTriggerTime( mikey_timer_t* timer, int64_t tick )
 {
-  if ( timer->mEnableCount && ( timer->mEnableReload || ! timer->mTimerDone ) )
+  if ( timer->mEnableCount && ! timer->mLinked )
   {
-    //tick value is increased by multipy of 16 (1 MHz resolution) lower bits are unchanged
-    return tick + (uint64_t)( 1 + timer->mValue ) * (uint64_t)( 1 << ( timer->mAudShift + 4 ) );
+    int64_t period = (int64_t)1 << ( timer->mAudShift + 4 );
+    return ( tick & ~( period - 1 ) ) + period;
   }
   else
   {
@@ -296,14 +363,6 @@ static int64_t mikey_timer_computeTriggerTime( mikey_timer_t* timer, int64_t tic
 
 static int64_t mikey_timer_computeAction( mikey_timer_t* timer, int64_t tick )
 {
-  mikey_timer_updateValue( timer, tick );
-  if ( timer->mResetDone )
-    timer->mTimerDone = false;
-  if ( timer->mValue == 0 && timer->mEnableReload )
-  {
-    timer->mValue = timer->mBackup;
-  }
-
   return mikey_timer_computeTriggerTime( timer, tick );
 }
 // mikey_timer_t end
@@ -321,10 +380,10 @@ typedef struct
   bool mEnableIntegrate;
   int8_t mVolume;
   int8_t mOutput;
+  uint8_t mFeedback;
   uint8_t mCtrlA;
 } mikey_audio_channel_t;
 
-static int64_t mikey_audio_channel_adjust( const mikey_audio_channel_t* ac, int64_t tick );
 static void mikey_audio_channel_trigger( mikey_audio_channel_t* ac );
 
 //mikey_audio_channel_t public:
@@ -337,14 +396,17 @@ static void mikey_audio_channel_AudioChannel( mikey_audio_channel_t* ac, uint32_
   ac->mEnableIntegrate = false;
   ac->mVolume = 0;
   ac->mOutput = 0;
+  ac->mFeedback = 0;
   ac->mCtrlA = 0;
   return;
 }
 
-static int64_t mikey_audio_channel_fireAction( mikey_audio_channel_t* ac, int64_t tick )
+static int64_t mikey_audio_channel_fireAction( mikey_audio_channel_t* ac, int64_t tick, bool* borrowOut )
 {
-  mikey_audio_channel_trigger( ac );
-  return mikey_audio_channel_adjust( ac, mikey_timer_fireAction( &ac->mTimer, tick ) );
+  int64_t action = mikey_timer_fireAction( &ac->mTimer, tick, borrowOut );
+  if ( *borrowOut )
+    mikey_audio_channel_trigger( ac );
+  return action;
 }
 
 static void mikey_audio_channel_setVolume( mikey_audio_channel_t* ac, int8_t value )
@@ -354,6 +416,7 @@ static void mikey_audio_channel_setVolume( mikey_audio_channel_t* ac, int8_t val
 
 static void mikey_audio_channel_setFeedback( mikey_audio_channel_t* ac, uint8_t value )
 {
+  ac->mFeedback = value;
   ac->mTapSelector = ( ac->mTapSelector & 0x3c0 ) | ( value & 0x3f ) | ( ( (int)value & 0xc0 ) << 4 );
 }
 
@@ -364,39 +427,35 @@ static void mikey_audio_channel_setOutput( mikey_audio_channel_t* ac, uint8_t va
 
 static void mikey_audio_channel_setShift( mikey_audio_channel_t* ac, uint8_t value )
 {
-  ac->mShiftRegister = ( ac->mShiftRegister & 0xff00 ) | value;
+  ac->mShiftRegister = ( ac->mShiftRegister & 0x0f00 ) | value;
 }
 
 static int64_t mikey_audio_channel_setBackup( mikey_audio_channel_t* ac, int64_t tick, uint8_t value )
 {
-  return mikey_audio_channel_adjust( ac, mikey_timer_setBackup( &ac->mTimer, tick, value ) );
+  return mikey_timer_setBackup( &ac->mTimer, tick, value );
 }
 
 static int64_t mikey_audio_channel_setControl( mikey_audio_channel_t* ac, int64_t tick, uint8_t value )
 {
-  if ( ac->mCtrlA == value )
-    return 0;
   ac->mCtrlA = value;
 
   ac->mTapSelector = ( ac->mTapSelector & 0xf7f ) | ( value & AC_FEEDBACK_7 );
   ac->mEnableIntegrate = ( value & AC_ENABLE_INTEGRATE ) != 0;
-  return mikey_audio_channel_adjust( ac, mikey_timer_setControlA( &ac->mTimer, tick, value & ~( AC_FEEDBACK_7 | AC_ENABLE_INTEGRATE ) ) );
+  return mikey_timer_setControlA( &ac->mTimer, tick, value & ~( AC_FEEDBACK_7 | AC_ENABLE_INTEGRATE ) );
 }
 
 static int64_t mikey_audio_channel_setCounter( mikey_audio_channel_t* ac, int64_t tick, uint8_t value )
 {
-  return mikey_audio_channel_adjust( ac, mikey_timer_setCount( &ac->mTimer, tick, value ) );
+  return mikey_timer_setCount( &ac->mTimer, tick, value );
 }
 
-static int64_t mikey_audio_channel_setOther( mikey_audio_channel_t* ac, int64_t tick, uint8_t value )
+static int64_t mikey_audio_channel_setOther( mikey_audio_channel_t* ac, int64_t tick, uint8_t value, bool* borrowOut )
 {
+  int64_t action = mikey_timer_setControlB( &ac->mTimer, tick, value & 0x0f, borrowOut );
+  if ( *borrowOut )
+    mikey_audio_channel_trigger( ac );
   ac->mShiftRegister = ( ac->mShiftRegister & 0x0ff ) | ( ( (int)value & 0xf0 ) << 4 );
-  return mikey_audio_channel_adjust( ac, mikey_timer_setControlB( &ac->mTimer, tick, value & 0x0f ) );
-}
-
-static int8_t mikey_audio_channel_getOutput( const mikey_audio_channel_t* ac )
-{
-  return ac->mOutput;
+  return action;
 }
 
 static uint8_t mikey_audio_channel_readRegister( mikey_audio_channel_t* ac, int64_t tick, int reg )
@@ -406,7 +465,7 @@ static uint8_t mikey_audio_channel_readRegister( mikey_audio_channel_t* ac, int6
   case 0:
     return ac->mVolume;
   case 1:
-    return ac->mTapSelector & 0xff;
+    return ac->mFeedback;
   case 2:
     return ac->mOutput;
   case 3:
@@ -416,27 +475,21 @@ static uint8_t mikey_audio_channel_readRegister( mikey_audio_channel_t* ac, int6
   case 5:
     return ac->mCtrlA;
   case 6:
-    return mikey_timer_getCount( &ac->mTimer, tick );
+    return mikey_timer_getCount( &ac->mTimer );
   case 7:
-    return ( ( ac->mShiftRegister >> 4 ) & 0xf0 );
+    mikey_timer_clearStatus( &ac->mTimer, tick );
+    return ( ( ac->mShiftRegister >> 4 ) & 0xf0 ) | ( ac->mTimer.mControlB & 0x0f );
   default:
     return 0xff;
   }
 }
 
 // mikey_audio_channel_t private:
-static int64_t mikey_audio_channel_adjust( const mikey_audio_channel_t* ac, int64_t tick )
-{
-  //ticks are advancing in 1 MHz resolution, so lower 4 bits are unused.
-  //timer number is encoded on lowest 2 bits.
-  return tick | ac->mNumber;
-}
-
 static void mikey_audio_channel_trigger( mikey_audio_channel_t* ac )
 {
   uint32_t xorGate = ac->mTapSelector & ac->mShiftRegister;
   uint32_t parity = popcnt( xorGate ) & 1;
-  uint32_t newShift = ( ac->mShiftRegister << 1 ) | ( parity ^ 1 );
+  uint32_t newShift = ( ( ac->mShiftRegister << 1 ) & 0x0ffe ) | ( parity ^ 1 );
   ac->mShiftRegister = newShift;
 
   if ( ac->mEnableIntegrate )
@@ -446,20 +499,19 @@ static void mikey_audio_channel_trigger( mikey_audio_channel_t* ac )
   }
   else
   {
-    ac->mOutput = ( newShift & 1 ) ? ac->mVolume : -ac->mVolume;
+    int32_t temp = ( newShift & 1 ) ? ac->mVolume : -(int32_t)ac->mVolume;
+    ac->mOutput = (int8_t)clamp_i32( temp, INT8_MIN, INT8_MAX );
   }
 }
 // mikey_audio_channel_t end
 
 
 /*
-  "Queue" holding events of channel timers fire timepoints.
-  Time is in 16 MHz units but only with 1 MHz resolution.
-  Two LSBs are used to encode channel number.
+  "Queue" holding events of timer and audio stages.
+  Time is in 16 MHz units.
 */
 // mikey_action_queue_t
-#define AQ_TAB_SIZE 4
-#define AQ_TAB_MASK ( AQ_TAB_SIZE - 1 )
+#define AQ_TAB_SIZE 8
 typedef struct
 {
   int64_t mTab[AQ_TAB_SIZE];
@@ -470,21 +522,35 @@ static void mikey_action_queue_ActionQueue( mikey_action_queue_t* aq )
 {
   int i;
   for (i = 0; i < AQ_TAB_SIZE; i ++)
-    aq->mTab[i] = CNT_MAX | i;
+    aq->mTab[i] = CNT_MAX;
 }
 
-static void mikey_action_queue_push( mikey_action_queue_t* aq, int64_t value )
+static void mikey_action_queue_set( mikey_action_queue_t* aq, int stage, int64_t value )
 {
-  aq->mTab[value & AQ_TAB_MASK] = value;
+  aq->mTab[stage] = value;
 }
 
-static int64_t mikey_action_queue_pop( mikey_action_queue_t* aq )
+static void mikey_action_queue_schedule( mikey_action_queue_t* aq, int stage, int64_t value )
 {
-  int64_t min1 = min_i64( aq->mTab[0], aq->mTab[1] );
-  int64_t min2 = min_i64( aq->mTab[2], aq->mTab[3] );
-  int64_t min3 = min_i64( min1, min2 );
+  aq->mTab[stage] = min_i64( aq->mTab[stage], value );
+}
 
-  return min3;
+static int64_t mikey_action_queue_pop( mikey_action_queue_t* aq, int* stage )
+{
+  int i;
+  int64_t value = aq->mTab[0];
+
+  *stage = 0;
+  for ( i = 1; i < AQ_TAB_SIZE; i ++ )
+  {
+    if ( aq->mTab[i] < value )
+    {
+      value = aq->mTab[i];
+      *stage = i;
+    }
+  }
+
+  return value;
 }
 
 
@@ -494,9 +560,13 @@ typedef struct
   int16_t right;
 } mikey_audio_sample_t;
 
+static const uint8_t mikey_timer_numbers[MIKEY_TIMER_STAGE_COUNT] = {1, 3, 5, 7};
+static const uint8_t mikey_stage_slots[MIKEY_STAGE_COUNT] = {1, 3, 5, 7, 8, 9, 10, 11};
+
 // mikey_pimpl_t
 typedef struct
 {
+  mikey_timer_t mTimers[MIKEY_TIMER_STAGE_COUNT];
   mikey_audio_channel_t mAudioChannels[4];
   int mAttenuationLeft[4];
   int mAttenuationRight[4];
@@ -509,6 +579,8 @@ typedef struct
 
   mikey_audio_sample_t mSample;
   bool mSampleValid;
+  int mWriteStage;
+  int mWriteBorrowStage;
 } mikey_pimpl_t;
 
 // mikey_pimpl_t public:
@@ -540,25 +612,188 @@ static void mikey_pimpl_MikeyPimpl( mikey_pimpl_t* mikey )
 static void mikey_pimpl_reset( mikey_pimpl_t* mikey )
 {
   int i;
+  for (i = 0; i < MIKEY_TIMER_STAGE_COUNT; i ++)
+    mikey_timer_Timer( &mikey->mTimers[i] );
   for (i = 0; i < 4; i ++)
     mikey_audio_channel_AudioChannel( &mikey->mAudioChannels[i], i );
-  mikey->mPan = 0xff;
+  mikey->mPan = 0;
   mikey->mStereo = 0;
   for (i = 0; i < MIKEY_REGPOOL_SIZE; i ++)
-    mikey->mRegisterPool[i] = (uint8_t)0xff;
+    mikey->mRegisterPool[i] = 0;
   for (i = 0; i < 4; i ++)
   {
-    mikey->mAttenuationLeft[i] = 0x3c;
-    mikey->mAttenuationRight[i] = 0x3c;
+    mikey->mAttenuationLeft[i] = 0;
+    mikey->mAttenuationRight[i] = 0;
   }
+  mikey->mSampleValid = false;
+  mikey->mWriteStage = -1;
+  mikey->mWriteBorrowStage = -1;
+}
+
+static int mikey_pimpl_timerStage( uint8_t timerNumber )
+{
+  int stage;
+  for ( stage = 0; stage < MIKEY_TIMER_STAGE_COUNT; stage ++ )
+  {
+    if ( mikey_timer_numbers[stage] == timerNumber )
+      return stage;
+  }
+  return -1;
+}
+
+static mikey_timer_t* mikey_pimpl_stageTimer( mikey_pimpl_t* mikey, int stage )
+{
+  if ( stage < MIKEY_TIMER_STAGE_COUNT )
+    return &mikey->mTimers[stage];
+  return &mikey->mAudioChannels[stage - MIKEY_AUDIO_STAGE_BASE].mTimer;
+}
+
+static int64_t mikey_pimpl_stageServiceTick( int stage, int64_t tick )
+{
+  int64_t action = ( tick & ~(int64_t)15 ) + mikey_stage_slots[stage];
+  if ( action <= tick )
+    action += 16;
+  return action;
+}
+
+static void mikey_pimpl_applyWriteAction( mikey_pimpl_t* mikey, mikey_action_queue_t* queue, int64_t tick, int64_t action )
+{
+  mikey_timer_t* timer;
+
+  if ( mikey->mWriteStage < 0 )
+    return;
+
+  timer = mikey_pimpl_stageTimer( mikey, mikey->mWriteStage );
+  if ( timer->mLinked && timer->mPendingClocks > 0 )
+  {
+    mikey_action_queue_schedule( queue, mikey->mWriteStage, mikey_pimpl_stageServiceTick( mikey->mWriteStage, tick ) );
+    return;
+  }
+
+  mikey_action_queue_set( queue, mikey->mWriteStage, action );
+}
+
+static int64_t mikey_pimpl_writeTimer( mikey_pimpl_t* mikey, int64_t tick, uint8_t address, uint8_t value )
+{
+  int stage = mikey_pimpl_timerStage( ( address >> 2 ) & 7 );
+  mikey_timer_t* timer;
+
+  if ( stage < 0 )
+    return 0;
+
+  mikey->mWriteStage = stage;
+  timer = &mikey->mTimers[stage];
+  switch ( address & 3 )
+  {
+  case 0:
+    return mikey_timer_setBackup( timer, tick, value );
+  case 1:
+    return mikey_timer_setControlA( timer, tick, value );
+  case 2:
+    return mikey_timer_setCount( timer, tick, value );
+  case 3:
+  {
+    bool borrowOut;
+    int64_t action = mikey_timer_setControlB( timer, tick, value, &borrowOut );
+    if ( borrowOut )
+      mikey->mWriteBorrowStage = stage;
+    return action;
+  }
+  default:
+    return 0;
+  }
+}
+
+static void mikey_pimpl_scheduleLink( mikey_pimpl_t* mikey, mikey_action_queue_t* queue, int stage, int64_t tick )
+{
+  int nextStage = ( stage + 1 ) & ( MIKEY_STAGE_COUNT - 1 );
+  mikey_timer_t* timer = mikey_pimpl_stageTimer( mikey, nextStage );
+  int64_t action;
+
+  if ( ! timer->mLinked )
+    return;
+
+  mikey_timer_clearStatus( timer, tick );
+  timer->mPendingClocks ++;
+  timer->mControlB |= TMR_CTRLB_BORROW_IN;
+  action = mikey_pimpl_stageServiceTick( nextStage, tick );
+  mikey_timer_scheduleStatusClear( timer, action );
+  mikey_action_queue_schedule( queue, nextStage, action );
+}
+
+static void mikey_pimpl_fireStage( mikey_pimpl_t* mikey, mikey_action_queue_t* queue, int stage, int64_t tick )
+{
+  mikey_timer_t* timer = mikey_pimpl_stageTimer( mikey, stage );
+  bool borrowOut = false;
+  int64_t action;
+
+  if ( timer->mLinked )
+  {
+    uint32_t clocks;
+    timer->mControlB &= ~( TMR_CTRLB_BORROW_OUT | TMR_CTRLB_BORROW_IN );
+
+    if ( ! timer->mEnableCount )
+    {
+      action = CNT_MAX;
+    }
+    else
+    {
+      if ( timer->mResetDone )
+      {
+        timer->mControlB &= ~TMR_CTRLB_TIMER_DONE;
+        timer->mTimerDone = false;
+      }
+
+      if ( timer->mEnableReload || ! timer->mTimerDone )
+      {
+        clocks = timer->mPendingClocks;
+        timer->mPendingClocks = 0;
+        if ( clocks > 0 )
+        {
+          timer->mControlB |= TMR_CTRLB_BORROW_IN;
+          while ( clocks -- > 0 )
+          {
+            borrowOut = mikey_timer_borrowIn( timer );
+            if ( borrowOut )
+            {
+              if ( stage >= MIKEY_AUDIO_STAGE_BASE )
+                mikey_audio_channel_trigger( &mikey->mAudioChannels[stage - MIKEY_AUDIO_STAGE_BASE] );
+              mikey_pimpl_scheduleLink( mikey, queue, stage, tick );
+              if ( ! timer->mEnableReload )
+                break;
+            }
+          }
+        }
+      }
+      action = CNT_MAX;
+    }
+    mikey_timer_scheduleStatusClear( timer, tick + 16 );
+  }
+  else if ( stage < MIKEY_TIMER_STAGE_COUNT )
+  {
+    action = mikey_timer_fireAction( timer, tick, &borrowOut );
+    mikey_timer_scheduleStatusClear( timer, mikey_pimpl_stageServiceTick( stage, tick ) );
+    if ( borrowOut )
+      mikey_pimpl_scheduleLink( mikey, queue, stage, tick );
+  }
+  else
+  {
+    action = mikey_audio_channel_fireAction( &mikey->mAudioChannels[stage - MIKEY_AUDIO_STAGE_BASE], tick, &borrowOut );
+    mikey_timer_scheduleStatusClear( timer, mikey_pimpl_stageServiceTick( stage, tick ) );
+    if ( borrowOut )
+      mikey_pimpl_scheduleLink( mikey, queue, stage, tick );
+  }
+
+  mikey_action_queue_set( queue, stage, action );
   mikey->mSampleValid = false;
 }
 
 static int64_t mikey_pimpl_write( mikey_pimpl_t* mikey, int64_t tick, uint8_t address, uint8_t value )
 {
-  //assert( address >= 0x20 );
+  mikey->mWriteStage = -1;
+  mikey->mWriteBorrowStage = -1;
   if ( address < 0x20 )
-    return 0;
+    return mikey_pimpl_writeTimer( mikey, tick, address, value );
 
   mikey->mSampleValid = false;
 
@@ -580,13 +815,23 @@ static int64_t mikey_pimpl_write( mikey_pimpl_t* mikey, int64_t tick, uint8_t ad
       mikey_audio_channel_setShift( &mikey->mAudioChannels[idx], value );
       break;
     case BACKUP:
+      mikey->mWriteStage = MIKEY_AUDIO_STAGE_BASE + idx;
       return mikey_audio_channel_setBackup( &mikey->mAudioChannels[idx], tick, value );
     case CONTROL:
+      mikey->mWriteStage = MIKEY_AUDIO_STAGE_BASE + idx;
       return mikey_audio_channel_setControl( &mikey->mAudioChannels[idx], tick, value );
     case COUNTER:
+      mikey->mWriteStage = MIKEY_AUDIO_STAGE_BASE + idx;
       return mikey_audio_channel_setCounter( &mikey->mAudioChannels[idx], tick, value );
     case OTHER:
-      return mikey_audio_channel_setOther( &mikey->mAudioChannels[idx], tick, value );
+    {
+      bool borrowOut;
+      int64_t action = mikey_audio_channel_setOther( &mikey->mAudioChannels[idx], tick, value, &borrowOut );
+      mikey->mWriteStage = MIKEY_AUDIO_STAGE_BASE + idx;
+      if ( borrowOut )
+        mikey->mWriteBorrowStage = MIKEY_AUDIO_STAGE_BASE + idx;
+      return action;
+    }
     }
   }
   else
@@ -615,13 +860,6 @@ static int64_t mikey_pimpl_write( mikey_pimpl_t* mikey, int64_t tick, uint8_t ad
   return 0;
 }
 
-static int64_t mikey_pimpl_fireTimer( mikey_pimpl_t* mikey, int64_t tick )
-{
-  size_t timer = (size_t)(tick & 3);
-  mikey->mSampleValid = false;
-  return mikey_audio_channel_fireAction( &mikey->mAudioChannels[timer], tick );
-}
-
 static mikey_audio_sample_t mikey_pimpl_sampleAudio( mikey_pimpl_t* mikey )
 {
   if ( !mikey->mSampleValid )
@@ -631,23 +869,23 @@ static mikey_audio_sample_t mikey_pimpl_sampleAudio( mikey_pimpl_t* mikey )
 
     if ( !mikey->mMute[0] )
     {
-      left += mikey->mAudioChannels[0].mOutput * ( ( ( mikey->mStereo & ( 0x01 << 0 ) ) == 0 ) ? ( ( mikey->mPan & ( 0x01 << 0 ) ) != 0 ? mikey->mAttenuationLeft[0] : 0x3c ) : 0 );
-      right += mikey->mAudioChannels[0].mOutput * ( ( ( mikey->mStereo & ( 0x10 << 0 ) ) == 0 ) ? ( ( mikey->mPan & ( 0x01 << 0 ) ) != 0 ? mikey->mAttenuationRight[0] : 0x3c ) : 0 );
+      left += mikey->mAudioChannels[0].mOutput * ( ( ( mikey->mStereo & ( 0x10 << 0 ) ) == 0 ) ? ( ( mikey->mPan & ( 0x10 << 0 ) ) != 0 ? mikey->mAttenuationLeft[0] : 0x3c ) : 0 );
+      right += mikey->mAudioChannels[0].mOutput * ( ( ( mikey->mStereo & ( 0x01 << 0 ) ) == 0 ) ? ( ( mikey->mPan & ( 0x01 << 0 ) ) != 0 ? mikey->mAttenuationRight[0] : 0x3c ) : 0 );
     }
     if ( !mikey->mMute[1] )
     {
-      left += mikey->mAudioChannels[1].mOutput * ( ( ( mikey->mStereo & ( 0x01 << 1 ) ) == 0 ) ? ( ( mikey->mPan & ( 0x01 << 1 ) ) != 0 ? mikey->mAttenuationLeft[1] : 0x3c ) : 0 );
-      right += mikey->mAudioChannels[1].mOutput * ( ( ( mikey->mStereo & ( 0x10 << 1 ) ) == 0 ) ? ( ( mikey->mPan & ( 0x01 << 1 ) ) != 0 ? mikey->mAttenuationRight[1] : 0x3c ) : 0 );
+      left += mikey->mAudioChannels[1].mOutput * ( ( ( mikey->mStereo & ( 0x10 << 1 ) ) == 0 ) ? ( ( mikey->mPan & ( 0x10 << 1 ) ) != 0 ? mikey->mAttenuationLeft[1] : 0x3c ) : 0 );
+      right += mikey->mAudioChannels[1].mOutput * ( ( ( mikey->mStereo & ( 0x01 << 1 ) ) == 0 ) ? ( ( mikey->mPan & ( 0x01 << 1 ) ) != 0 ? mikey->mAttenuationRight[1] : 0x3c ) : 0 );
     }
     if ( !mikey->mMute[2] )
     {
-      left += mikey->mAudioChannels[2].mOutput * ( ( ( mikey->mStereo & ( 0x01 << 2 ) ) == 0 ) ? ( ( mikey->mPan & ( 0x01 << 2 ) ) != 0 ? mikey->mAttenuationLeft[2] : 0x3c ) : 0 );
-      right += mikey->mAudioChannels[2].mOutput * ( ( ( mikey->mStereo & ( 0x10 << 2 ) ) == 0 ) ? ( ( mikey->mPan & ( 0x01 << 2 ) ) != 0 ? mikey->mAttenuationRight[2] : 0x3c ) : 0 );
+      left += mikey->mAudioChannels[2].mOutput * ( ( ( mikey->mStereo & ( 0x10 << 2 ) ) == 0 ) ? ( ( mikey->mPan & ( 0x10 << 2 ) ) != 0 ? mikey->mAttenuationLeft[2] : 0x3c ) : 0 );
+      right += mikey->mAudioChannels[2].mOutput * ( ( ( mikey->mStereo & ( 0x01 << 2 ) ) == 0 ) ? ( ( mikey->mPan & ( 0x01 << 2 ) ) != 0 ? mikey->mAttenuationRight[2] : 0x3c ) : 0 );
     }
     if ( !mikey->mMute[3] )
     {
-      left += mikey->mAudioChannels[3].mOutput * ( ( ( mikey->mStereo & ( 0x01 << 3 ) ) == 0 ) ? ( ( mikey->mPan & ( 0x01 << 3 ) ) != 0 ? mikey->mAttenuationLeft[3] : 0x3c ) : 0 );
-      right += mikey->mAudioChannels[3].mOutput * ( ( ( mikey->mStereo & ( 0x10 << 3 ) ) == 0 ) ? ( ( mikey->mPan & ( 0x01 << 3 ) ) != 0 ? mikey->mAttenuationRight[3] : 0x3c ) : 0 );
+      left += mikey->mAudioChannels[3].mOutput * ( ( ( mikey->mStereo & ( 0x10 << 3 ) ) == 0 ) ? ( ( mikey->mPan & ( 0x10 << 3 ) ) != 0 ? mikey->mAttenuationLeft[3] : 0x3c ) : 0 );
+      right += mikey->mAudioChannels[3].mOutput * ( ( ( mikey->mStereo & ( 0x01 << 3 ) ) == 0 ) ? ( ( mikey->mPan & ( 0x01 << 3 ) ) != 0 ? mikey->mAttenuationRight[3] : 0x3c ) : 0 );
     }
 
     mikey->mSample.left = ( int16_t )left;
@@ -660,15 +898,44 @@ static mikey_audio_sample_t mikey_pimpl_sampleAudio( mikey_pimpl_t* mikey )
 
 static uint8_t mikey_pimpl_read( mikey_pimpl_t* mikey, int64_t tick, int address )
 {
-  size_t i = address >> 3;
-  if ( i < 4 )
+  if ( address < 0x20 )
   {
+    int stage = mikey_pimpl_timerStage( ( address >> 2 ) & 7 );
+    mikey_timer_t* timer;
+
+    if ( stage < 0 )
+      return 0xff;
+
+    timer = &mikey->mTimers[stage];
+    switch ( address & 3 )
+    {
+    case 0:
+      return mikey_timer_getBackup( timer );
+    case 1:
+      return timer->mControlA;
+    case 2:
+      return mikey_timer_getCount( timer );
+    case 3:
+      mikey_timer_clearStatus( timer, tick );
+      return timer->mControlB;
+    default:
+      return 0xff;
+    }
+  }
+
+  if ( address < 0x40 )
+  {
+    size_t i = ( address - 0x20 ) >> 3;
     return mikey_audio_channel_readRegister( &mikey->mAudioChannels[i], tick, address & 7 );
   }
-  else if ( (size_t)address < MIKEY_REGPOOL_SIZE )
-    return mikey->mRegisterPool[address];
-  else
-    return 0xff;
+
+  if ( address >= ATTENREG0 && address <= ATTENREG3 )
+    return mikey->mRegisterPool[8 * 4 + ( address & 3 )];
+  if ( address == MPAN )
+    return mikey->mPan;
+  if ( address == MSTEREO )
+    return mikey->mStereo;
+  return 0xff;
 }
 
 static void mikey_pimpl_mute( mikey_pimpl_t* mikey, int channel, bool mute )
@@ -734,9 +1001,10 @@ static void mikey_write( void* info, uint8_t address, uint8_t value )
   mikey_t* mikey = (mikey_t*)info;
 
   int64_t action = mikey_pimpl_write( &mikey->mMikey, mikey->mTick, address, value );
-  if ( action )
+  mikey_pimpl_applyWriteAction( &mikey->mMikey, &mikey->mQueue, mikey->mTick, action );
+  if ( mikey->mMikey.mWriteBorrowStage >= 0 )
   {
-    mikey_action_queue_push( &mikey->mQueue, action );
+    mikey_pimpl_scheduleLink( &mikey->mMikey, &mikey->mQueue, mikey->mMikey.mWriteBorrowStage, mikey->mTick );
   }
 }
 
@@ -746,10 +1014,16 @@ static void mikey_update( void* info, UINT32 samples, DEV_SMPL** outputs )
   UINT32 i = 0;
   for ( ;; )
   {
-    int64_t value = mikey_action_queue_pop( &mikey->mQueue );
+    int stage;
+    int64_t value = mikey_action_queue_pop( &mikey->mQueue, &stage );
     while ( value > mikey->mTick )
     {
-      mikey_audio_sample_t sample = mikey_pimpl_sampleAudio( &mikey->mMikey );
+      mikey_audio_sample_t sample;
+
+      if ( i >= samples )
+        return;
+
+      sample = mikey_pimpl_sampleAudio( &mikey->mMikey );
       outputs[0][i] = sample.left;
       outputs[1][i] = sample.right;
 
@@ -762,14 +1036,10 @@ static void mikey_update( void* info, UINT32 samples, DEV_SMPL** outputs )
         mikey->mNextTick += 1;
       }
 
-      if ( ++i >= samples )
-        return;
+      i ++;
     }
 
-    {
-      int64_t newAction = mikey_pimpl_fireTimer( &mikey->mMikey, value );
-      mikey_action_queue_push( &mikey->mQueue, newAction );
-    }
+    mikey_pimpl_fireStage( &mikey->mMikey, &mikey->mQueue, stage, value );
   }
 }
 
