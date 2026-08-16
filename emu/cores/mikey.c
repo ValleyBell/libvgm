@@ -188,6 +188,7 @@ typedef struct
   int mAudShift;
   bool mEnableReload;
   bool mEnableCount;
+  bool mResetDone;
   bool mTimerDone;
   uint8_t mBackup;
   uint8_t mValue;
@@ -204,6 +205,7 @@ static void mikey_timer_Timer( mikey_timer_t* timer )
   timer->mAudShift = 0;
   timer->mEnableReload = false;
   timer->mEnableCount = false;
+  timer->mResetDone = false;
   timer->mTimerDone = false;
   timer->mBackup = 0;
   timer->mValue = 0;
@@ -217,26 +219,35 @@ static int64_t mikey_timer_setBackup( mikey_timer_t* timer, int64_t tick, uint8_
 
 static int64_t mikey_timer_setControlA( mikey_timer_t* timer, int64_t tick, uint8_t controlA )
 {
-  timer->mTimerDone ^= ( controlA & TMR_CTRLA_RESET_DONE ) != 0;
+  mikey_timer_updateValue( timer, tick );
+  timer->mResetDone = ( controlA & TMR_CTRLA_RESET_DONE ) != 0;
   timer->mEnableReload = ( controlA & TMR_CTRLA_ENABLE_RELOAD ) != 0;
   timer->mEnableCount = ( controlA & TMR_CTRLA_ENABLE_COUNT ) != 0;
   timer->mAudShift = controlA & TMR_CTRLA_AUD_CLOCK_MASK;
+
+  if ( timer->mResetDone )
+    timer->mTimerDone = false;
 
   return mikey_timer_computeAction( timer, tick );
 }
 
 static int64_t mikey_timer_setCount( mikey_timer_t* timer, int64_t tick, uint8_t value )
 {
+  mikey_timer_updateValue( timer, tick );
+  timer->mValue = value;
+  timer->mValueUpdateTick = tick;
   return mikey_timer_computeTriggerTime( timer, tick );
 }
 
-static void mikey_timer_setControlB( mikey_timer_t* timer, uint8_t controlB )
+static int64_t mikey_timer_setControlB( mikey_timer_t* timer, int64_t tick, uint8_t controlB )
 {
   timer->mTimerDone = ( controlB & TMR_CTRLB_TIMER_DONE ) != 0;
+  return mikey_timer_computeAction( timer, tick );
 }
 
 static int64_t mikey_timer_fireAction( mikey_timer_t* timer, int64_t tick )
 {
+  mikey_timer_updateValue( timer, tick );
   timer->mTimerDone = true;
 
   return mikey_timer_computeAction( timer, tick );
@@ -262,7 +273,7 @@ static uint64_t mikey_timer_scaleDiff( const mikey_timer_t* timer, uint64_t olde
 
 static void mikey_timer_updateValue( mikey_timer_t* timer, int64_t tick )
 {
-  if ( timer->mEnableCount )
+  if ( timer->mEnableCount && ( timer->mEnableReload || ! timer->mTimerDone ) )
   {
     int64_t const scaledDiff = ( int64_t )mikey_timer_scaleDiff( timer, ( uint64_t )timer->mValueUpdateTick, ( uint64_t )tick );
     timer->mValue = ( uint8_t )clamp0_i64( ( int64_t )timer->mValue - scaledDiff );
@@ -272,7 +283,7 @@ static void mikey_timer_updateValue( mikey_timer_t* timer, int64_t tick )
 
 static int64_t mikey_timer_computeTriggerTime( mikey_timer_t* timer, int64_t tick )
 {
-  if ( timer->mEnableCount && timer->mValue != 0 )
+  if ( timer->mEnableCount && ( timer->mEnableReload || ! timer->mTimerDone ) )
   {
     //tick value is increased by multipy of 16 (1 MHz resolution) lower bits are unchanged
     return tick + (uint64_t)( 1 + timer->mValue ) * (uint64_t)( 1 << ( timer->mAudShift + 4 ) );
@@ -286,6 +297,8 @@ static int64_t mikey_timer_computeTriggerTime( mikey_timer_t* timer, int64_t tic
 static int64_t mikey_timer_computeAction( mikey_timer_t* timer, int64_t tick )
 {
   mikey_timer_updateValue( timer, tick );
+  if ( timer->mResetDone )
+    timer->mTimerDone = false;
   if ( timer->mValue == 0 && timer->mEnableReload )
   {
     timer->mValue = timer->mBackup;
@@ -375,10 +388,10 @@ static int64_t mikey_audio_channel_setCounter( mikey_audio_channel_t* ac, int64_
   return mikey_audio_channel_adjust( ac, mikey_timer_setCount( &ac->mTimer, tick, value ) );
 }
 
-static void mikey_audio_channel_setOther( mikey_audio_channel_t* ac, uint8_t value )
+static int64_t mikey_audio_channel_setOther( mikey_audio_channel_t* ac, int64_t tick, uint8_t value )
 {
   ac->mShiftRegister = ( ac->mShiftRegister & 0x0ff ) | ( ( (int)value & 0xf0 ) << 4 );
-  mikey_timer_setControlB( &ac->mTimer, value & 0x0f );
+  return mikey_audio_channel_adjust( ac, mikey_timer_setControlB( &ac->mTimer, tick, value & 0x0f ) );
 }
 
 static int8_t mikey_audio_channel_getOutput( const mikey_audio_channel_t* ac )
@@ -573,8 +586,7 @@ static int64_t mikey_pimpl_write( mikey_pimpl_t* mikey, int64_t tick, uint8_t ad
     case COUNTER:
       return mikey_audio_channel_setCounter( &mikey->mAudioChannels[idx], tick, value );
     case OTHER:
-      mikey_audio_channel_setOther( &mikey->mAudioChannels[idx], value );
-      break;
+      return mikey_audio_channel_setOther( &mikey->mAudioChannels[idx], tick, value );
     }
   }
   else
