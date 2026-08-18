@@ -535,7 +535,7 @@ static void mikey_action_queue_schedule( mikey_action_queue_t* aq, int stage, in
   aq->mTab[stage] = min_i64( aq->mTab[stage], value );
 }
 
-static int64_t mikey_action_queue_pop( mikey_action_queue_t* aq, int* stage )
+static int64_t mikey_action_queue_peek( const mikey_action_queue_t* aq, int* stage )
 {
   int i;
   int64_t value = aq->mTab[0];
@@ -1015,7 +1015,7 @@ static void mikey_update( void* info, UINT32 samples, DEV_SMPL** outputs )
   for ( ;; )
   {
     int stage;
-    int64_t value = mikey_action_queue_pop( &mikey->mQueue, &stage );
+    int64_t value = mikey_action_queue_peek( &mikey->mQueue, &stage );
     while ( value > mikey->mTick )
     {
       mikey_audio_sample_t sample;
