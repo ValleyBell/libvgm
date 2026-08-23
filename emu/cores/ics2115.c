@@ -16,7 +16,7 @@
 
 */
 
-#include <math.h> // for round() and pow()
+#include <math.h> // for pow()
 #include <stdlib.h>
 #include <string.h>	// for memset
 #include <stddef.h>	// for NULL
@@ -266,6 +266,7 @@ static UINT8 device_start_ics2115(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 	int i;
 	UINT16 lut[8];
 	UINT16 lut_initial;
+	UINT8 exponent, mantissa;
 
 	chip = (ics2115_state *)calloc(1, sizeof(ics2115_state));
 	if (chip == NULL)
@@ -304,7 +305,6 @@ static UINT8 device_start_ics2115(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 	// mant = i[7:0]
 	// exp == 0 : mant >> 7
 	// exp > 0 : ceil(((0x100 | mant) << exp) / 512)
-	UINT8 exponent, mantissa;
 	for (i = 0; i < 4096; i++)
 	{
 		exponent = i >> 8;
@@ -334,7 +334,7 @@ static UINT8 device_start_ics2115(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 	// round(1024*2^(frac/32))
 	for (i = 0; i < 32; i++)
 	{
-		chip->volinc_frac[i] = (UINT16)(round(1024.0 * pow(2.0, (double)(i) / 32.0)));
+		chip->volinc_frac[i] = (UINT16)(1024.0 * pow(2.0, (double)(i) / 32.0) + 0.5);
 	}
 
 	return 0x00;
