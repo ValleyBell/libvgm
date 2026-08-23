@@ -277,8 +277,8 @@ static void render(GB_gameboy_t *gb)
             }
         }
 
-        output.left += (int16_t)(gb->apu_output.channel_output[i].left * multiplier);
-        output.right += (int16_t)(gb->apu_output.channel_output[i].right * multiplier);
+        output.left += (int32_t)(gb->apu_output.channel_output[i].left * multiplier);
+        output.right += (int32_t)(gb->apu_output.channel_output[i].right * multiplier);
     }
     gb->apu_output.cycles_since_render = 0;
     if (unlikely(gb->apu_output.sample_fraction < (1 << 28))) {
@@ -290,8 +290,8 @@ static void render(GB_gameboy_t *gb)
     
     //if (gb->sgb && gb->sgb->intro_animation < GB_SGB_INTRO_ANIMATION_LENGTH) return;
 
-    filtered_output.left = gb->apu_output.highpass_mode? (output.left  - (int16_t)gb->apu_output.highpass_diff.left) : output.left;
-    filtered_output.right = gb->apu_output.highpass_mode? (output.right - (int16_t)gb->apu_output.highpass_diff.right) : output.right;
+    filtered_output.left = gb->apu_output.highpass_mode? (output.left  - (int32_t)gb->apu_output.highpass_diff.left) : output.left;
+    filtered_output.right = gb->apu_output.highpass_mode? (output.right - (int32_t)gb->apu_output.highpass_diff.right) : output.right;
 
     switch (gb->apu_output.highpass_mode) {
         case GB_HIGHPASS_OFF:
@@ -329,7 +329,7 @@ static void render(GB_gameboy_t *gb)
     
     if (gb->apu_output.interference_volume != 0.0) {
         signed interference_bias = interference(gb);
-        int16_t interference_sample = (int16_t)(interference_bias - gb->apu_output.interference_highpass);
+        int32_t interference_sample = (int32_t)(interference_bias - gb->apu_output.interference_highpass);
         gb->apu_output.interference_highpass = gb->apu_output.interference_highpass * gb->apu_output.highpass_rate +
         (1 - gb->apu_output.highpass_rate) * interference_sample;
         interference_bias *= gb->apu_output.interference_volume;
@@ -350,6 +350,11 @@ static void update_square_sample(GB_gameboy_t *gb, GB_channel_t index, unsigned 
         return;
     }
 
+    if (gb->apu.square_channels[index].sample_length >= gb->apu_output.sample_len_lowpass) {
+        // low-pass filter for inaudible square periods -Valley Bell
+        update_sample(gb, index, gb->apu.square_channels[index].current_volume / 2, cycles);
+        return;
+    }
     duty = gb->io_registers[index == GB_SQUARE_1? GB_IO_NR11 :GB_IO_NR21] >> 6;
     update_sample(gb, index,
                   duties[gb->apu.square_channels[index].current_sample_index + duty * 8]?
@@ -2138,9 +2143,18 @@ static void GB_set_sample_rate(GB_gameboy_t *gb, unsigned sample_rate)
         for (i = 1; i < GB_QUICK_MULTIPLY_COUNT; i++) {
             gb->apu_output.quick_fraction_multiply_cache[i] = gb->apu_output.quick_fraction_multiply_cache[0] * (i + 1);
         }
+        {
+            // square wave period = 1048576 [period update clock] / 8 [duty cycle samples] / sample_countdown
+            // where sample_countdown = [0xFFF low-pitch .. 0x001 high-pitch]
+            // sample_countdown = (NRx4|NRx3 ^ 0x7FF) * 2 + 1
+            double lowpass_cycles = GB_get_clock_rate(gb) / sample_rate;	// period update clock = GB clock / 4
+            lowpass_cycles /= 8;	// divide by total duty cycle length (APU cycles for whole duty period -> APU cycles for 1 duty sample)
+            gb->apu_output.sample_len_lowpass = 0x7FF - ((unsigned)lowpass_cycles - 1) / 2;	// note: rounding here is exactly intended
+        }
     }
     else {
         gb->apu_output.max_cycles_per_sample = 0x400;
+        gb->apu_output.sample_len_lowpass = 0x800;
     }
 }
 
@@ -2282,7 +2296,7 @@ static UINT8 device_start_gb_sameboy(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf
 		return 0xFF;
 
 	gb->clock_rate = cfg->clock;
-	gb->smpl_rate = gb->clock_rate / 64;
+	gb->smpl_rate = gb->clock_rate / 32;	// wave period update is with 131072 Hz
 	SRATE_CUSTOM_HIGHEST(cfg->srMode, gb->smpl_rate, cfg->smplRate);
 
 	gb->model = (cfg->flags & 0x01) ? GB_MODEL_CGB_A : GB_MODEL_DMG_B;

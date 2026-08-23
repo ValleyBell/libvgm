@@ -41,10 +41,10 @@
 typedef union
 {
     struct {
-        int16_t left;
-        int16_t right;
+        int32_t left;	// Note: needs to be int32_t to prevent overflow with MAX_CH_AMP=0x1E00
+        int32_t right;
     };
-    uint32_t packed;
+    uint64_t packed;
 } GB_sample_t;
 
 typedef struct
@@ -172,6 +172,7 @@ typedef enum {
 
 typedef struct {
     unsigned sample_rate;
+    unsigned sample_len_lowpass; // [square channels] assume inaudible wave when sample_length >= sample_len_lowpass
 
     unsigned sample_cycles; // Counts by sample_rate until it reaches the clock frequency
     unsigned max_cycles_per_sample;
