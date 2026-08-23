@@ -181,6 +181,8 @@ VGMPlayer::VGMPlayer() :
 				devOpts.coreOpts = OPT_AY8910_PCM3CH_DETECT;
 			else if (devID == DEVID_NES_APU)
 				devOpts.coreOpts = 0x01B7;
+			else if (devID == DEVID_GB_DMG)
+				devOpts.coreOpts = OPT_GB_DMG_HIGHPASS;
 			else if (devID == DEVID_SCSP)
 				devOpts.coreOpts = OPT_SCSP_BYPASS_DSP;
 			_devOptMap[devID][chipID] = optID;

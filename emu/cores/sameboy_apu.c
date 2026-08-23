@@ -160,8 +160,16 @@ static void update_sample(GB_gameboy_t *gb, GB_channel_t index, int8_t value, un
             left = gb->io_registers[GB_IO_NR51] & (0x10 << index);
             right = gb->io_registers[GB_IO_NR51] & (1 << index);
             
-            output.left = (0xF - (left? value * 2 + bias : silence)) * left_volume;
-            output.right = (0xF - (right? value * 2 + bias : silence)) * right_volume;
+            if (!gb->noDcOffset) {
+                output.left = (0xF - (left? value * 2 + bias : silence)) * left_volume;
+                output.right = (0xF - (right? value * 2 + bias : silence)) * right_volume;
+            }
+            else {
+                if (index == GB_WAVE)
+                    value ^= 0xF;
+                output.left = (left? value * 2 : 0) * left_volume;
+                output.right = (right? value * 2 : 0) * right_volume;
+            }
             
             if (unlikely(gb->apu_output.channel_muted[index])) {
                 output.left = output.right = 0;
@@ -191,8 +199,14 @@ static void update_sample(GB_gameboy_t *gb, GB_channel_t index, int8_t value, un
             left_volume = ((gb->io_registers[GB_IO_NR50] >> 4) & 7) + 1;
         }
         if (likely(!gb->apu_output.channel_muted[index])) {
-            output.left = (0xF - value * 2) * left_volume;
-            output.right = (0xF - value * 2) * right_volume;
+            if (!gb->noDcOffset) {
+                output.left = (0xF - value * 2) * left_volume;
+                output.right = (0xF - value * 2) * right_volume;
+            }
+            else {
+                output.left = (value * 2) * left_volume;
+                output.right = (value * 2) * right_volume;
+            }
         }
         gb->apu_output.channel_output[index] = output;
     }
@@ -2307,10 +2321,12 @@ static UINT8 device_start_gb_sameboy(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf
 	RC_SET_RATIO(&gb->cycleCntr, cfg->clock, gb->smpl_rate);
 
 	gb_sameboy_set_mute_mask(gb, 0x00);
-	GB_set_highpass_filter_mode(gb, GB_HIGHPASS_ACCURATE);
-	GB_set_interference_volume(gb, 0.0);
 	gb->noWaveCorrupt = false;
+	gb->noDcOffset = false;
+	gb->enableHighpass = true;
 	gb->legacyMode = false;
+	GB_set_highpass_filter_mode(gb, gb->enableHighpass ? GB_HIGHPASS_ACCURATE : GB_HIGHPASS_OFF);
+	GB_set_interference_volume(gb, 0.0);
 
 	gb->_devData.chipInf = gb;
 	INIT_DEVINF(retDevInf, &gb->_devData, gb->smpl_rate, &devDef_GB_SameBoy);
@@ -2376,7 +2392,10 @@ static void gb_sameboy_set_options(void *chip, UINT32 Flags)
 	GB_gameboy_t *gb = (GB_gameboy_t *)chip;
 	
 	gb->noWaveCorrupt = (Flags & 0x02) >> 1;
+	gb->noDcOffset = (Flags & 0x04) >> 1;
+	gb->enableHighpass = (Flags & 0x08) >> 1;
 	gb->legacyMode = (Flags & 0x80) >> 7;
+	GB_set_highpass_filter_mode(gb, gb->enableHighpass ? GB_HIGHPASS_ACCURATE : GB_HIGHPASS_OFF);
 	
 	return;
 }
