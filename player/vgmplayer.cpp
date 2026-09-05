@@ -1798,14 +1798,18 @@ void VGMPlayer::ParseFileForOPL4ROMRequirement(void)
 	UINT8 yrwUse = 0x00;
 	UINT8 fileRom = 0x00;
 	UINT8 waveTblHdr[2] = {0x00, 0x00};
+	UINT8* waveRamTbl[2];	// cache for the 128 sample headers of wave RAM
 	UINT16 slotWave[2][24];
 	UINT8 stopScan = 0x00;
+	
 	memset(slotWave, 0x00, sizeof(slotWave));
+	waveRamTbl[0] = (UINT8*)malloc(0x600 * 2);	// 128 instruments * 12 bytes per instrument = 0x600 bytes
+	memset(waveRamTbl[0], 0x00, 0x600 * 2);
+	waveRamTbl[1] = &waveRamTbl[0][0x600 * 1];
 	
 	while(filePos < _fileHdr.dataEnd && ! stopScan)
 	{
 		UINT8 curCmd = _fileData[filePos];
-		
 		switch(curCmd)
 		{
 		case 0x66:	// end of command data
@@ -1820,15 +1824,31 @@ void VGMPlayer::ParseFileForOPL4ROMRequirement(void)
 			{
 				UINT8 dblkType = _fileData[filePos + 0x02];
 				UINT32 dblkLenRaw = ReadLE32(&_fileData[filePos + 0x03]);
+				UINT8 chipID = dblkLenRaw >> 31;
 				UINT32 dblkLen = dblkLenRaw & 0x7FFFFFFF;
+				filePos += 0x07;
+				
 				if (dblkType == 0x84)	// YMF278B ROM
-					fileRom |= 1 << (dblkLenRaw >> 31);
-				if (dblkLen > _fileHdr.dataEnd - filePos - 0x07)
+					fileRom |= (1 << chipID);	// mark main ROM as "used"
+				if (dblkLen > _fileHdr.dataEnd - filePos)
 				{
 					stopScan = 0x01;
 					break;
 				}
-				filePos += 0x07 + dblkLen;
+				if (dblkType == 0x87 && dblkLen > 0x08)	// YMF278B RAM
+				{
+					// store the wave RAM header, so that we can later identify samples that reference the main ROM
+					UINT32 dataOfs = ReadLE32(&_fileData[filePos + 0x04]);
+					const UINT8* dataPtr = &_fileData[filePos + 0x08];
+					UINT32 dataLen = dblkLen - 0x08;
+					if (dataOfs < 0x600)
+					{
+						if (dataOfs + dataLen > 0x600)
+							dataLen = 0x600 - dataOfs;
+						memcpy(&waveRamTbl[chipID][dataOfs], dataPtr, dataLen);
+					}
+				}
+				filePos += dblkLen;
 			}
 			break;
 		case 0xD0:	// YMF278B register write
@@ -1853,12 +1873,12 @@ void VGMPlayer::ParseFileForOPL4ROMRequirement(void)
 					{
 						UINT8 slot = (reg - 0x08) % 24;
 						UINT8 regGrp = (reg - 0x08) / 24;
+						UINT8 checkIns = 0;
 						
 						if (regGrp == 0x00)
 						{
 							slotWave[chipID][slot] = (slotWave[chipID][slot] & 0x100) | data;
-							if (slotWave[chipID][slot] < 384 || ! waveTblHdr[chipID])
-								yrwUse |= 1 << chipID;
+							checkIns = 1;
 						}
 						else if (regGrp == 0x01)
 						{
@@ -1866,8 +1886,24 @@ void VGMPlayer::ParseFileForOPL4ROMRequirement(void)
 						}
 						else if (regGrp == 0x04 && (data & 0x80))
 						{
+							checkIns = 1;
+						}
+						if (checkIns)
+						{
 							if (slotWave[chipID][slot] < 384 || ! waveTblHdr[chipID])
+							{
 								yrwUse |= 1 << chipID;
+							}
+							else
+							{
+								// check whether or not the RAM-defined sample makes use of the ROM wave data
+								UINT32 tblOfs = (slotWave[chipID][slot] - 384) * 0x0C;
+								const UINT8* tblPtr = &waveRamTbl[chipID][tblOfs];
+								UINT32 startAddr = ((tblPtr[0] & 0x3F) << 16) | (tblPtr[1] << 8) | (tblPtr[2] << 0);
+								UINT16 endaddr = (tblPtr[5] << 8) | (tblPtr[6] << 0);
+								if (endaddr != 0 && startAddr < waveTblHdr[chipID] * 0x80000)
+									yrwUse |= 1 << chipID;
+							}
 						}
 					}
 				}
@@ -1889,6 +1925,7 @@ void VGMPlayer::ParseFileForOPL4ROMRequirement(void)
 			break;
 		}
 	}
+	free(waveRamTbl[0]);
 	
 	_opl4YRW801Req = yrwUse & ~fileRom;
 	return;
