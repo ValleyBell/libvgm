@@ -135,7 +135,7 @@ typedef struct {
 		INT32 left;
 		INT32 acc, start, end; // address counters (20.9 fixed point)
 		UINT16 fc;              // frequency (6.9 fixed point)
-		UINT8 ctl, saddr;
+		UINT8 saddr;
 	} osc;
 
 	struct {
@@ -147,6 +147,16 @@ typedef struct {
 		UINT8 incr;
 		UINT8 pan, mode;
 	} vol;
+
+	union {
+		struct {
+			UINT8 done       : 1;   // done flag
+			UINT8 stop       : 1;   // stop flag
+			UINT8            : 6;   // padding
+			// IRQ on variable?
+		} bitflags;
+		UINT8 value;
+	} osc_ctrl;
 
 	union {
 		struct {
@@ -177,12 +187,6 @@ typedef struct {
 		} bitflags;
 		UINT8 value;
 	} vol_ctrl;
-
-	// Possibly redundant state. => improvements of wavetable logic
-	// may lead to its elimination.
-	struct {
-		bool on;
-	} state;
 
 	UINT16 regs[0x20]; // channel registers
 
@@ -334,7 +338,7 @@ static UINT8 device_start_ics2115(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
 	// round(1024*2^(frac/32))
 	for (i = 0; i < 32; i++)
 	{
-		chip->volinc_frac[i] = (UINT16)(1024.0 * pow(2.0, (double)(i) / 32.0) + 0.5);
+		chip->volinc_frac[i] = (UINT32)(1024.0 * pow(2.0, (double)(i) / 32.0) + 0.5);
 	}
 
 	return 0x00;
@@ -386,7 +390,7 @@ static void device_reset_ics2115(void *info)
 		v->osc.acc = 0;
 		v->osc.start = 0;
 		v->osc.end = 0;
-		v->osc.ctl = 0;
+		v->osc_ctrl.value = 0;
 		v->osc.saddr = 0;
 		v->vol.acc = 0;
 		v->vol.incr = 0;
@@ -395,7 +399,6 @@ static void device_reset_ics2115(void *info)
 		v->vol.pan = 0x7f;
 		v->vol_ctrl.value = 1;
 		v->vol.mode = 0;
-		v->state.on = false;
 	}
 	ics2115_set_mute_mask(chip, muteMask);
 	chip->output_rate = ics2115_get_output_rate(chip);
@@ -585,7 +588,7 @@ static int update_oscillator(ics2115_voice *voice)
 	}
 	else
 	{
-		voice->state.on = false;
+		voice->osc_ctrl.bitflags.done = true;
 		voice->osc_conf.bitflags.stop = true;
 		if (!voice->osc_conf.bitflags.invert)
 			voice->osc.acc = voice->osc.end;
@@ -604,7 +607,7 @@ static INT32 get_sample(ics2115_state *chip, ics2115_voice *voice)
 	INT32 diff;
 	UINT16 fract;
 
-	if (voice->state.on && voice->osc_conf.bitflags.loop && !voice->osc_conf.bitflags.loop_bidir &&
+	if ((voice->osc_ctrl.value == 0) && voice->osc_conf.bitflags.loop && !voice->osc_conf.bitflags.loop_bidir &&
 			(voice->osc.left < (voice->osc.fc << 2)))
 	{
 		//logerror("C?[%x:%x]", voice->osc.left, voice->osc.acc);
@@ -645,7 +648,7 @@ static INT32 get_sample(ics2115_state *chip, ics2115_voice *voice)
 
 static bool playing(ics2115_voice *voice)
 {
-	return voice->state.on && !(voice->osc_conf.bitflags.stop);
+	return (voice->osc_ctrl.value == 0) && !(voice->osc_conf.bitflags.stop);
 }
 
 static UINT8 fill_output(ics2115_state *chip, ics2115_voice *voice, UINT32 samples, INT32 *loutput, INT32 *routput)
@@ -654,6 +657,7 @@ static UINT8 fill_output(ics2115_state *chip, ics2115_voice *voice, UINT32 sampl
 	UINT8 irq_invalid = 0;
 	UINT16 e;
 	// measured from hardware
+	/*
 	switch (voice->vol.mode & 0x3)
 	{
 		case 0x0:
@@ -668,6 +672,10 @@ static UINT8 fill_output(ics2115_state *chip, ics2115_voice *voice, UINT32 sampl
 			voice->vol.add = voice->vol.incr << 10;
 			break;
 	}
+	*/
+	// kov doesn't like above...
+	e = 1 << (3 * (voice->vol.incr >> 6));
+	voice->vol.add = (voice->vol.incr & 0x3f) << (10 - e);
 
 	for (i = 0; i < samples; i++)
 	{
@@ -780,7 +788,7 @@ static UINT16 reg_read(ics2115_state *chip)
 	{
 		case 0x00: // [osc] Oscillator Configuration
 			ret = voice->osc_conf.value;
-			if (voice->state.on)
+			if (voice->osc_ctrl.value == 0)
 			{
 				ret |= 8;
 			}
@@ -899,7 +907,7 @@ static UINT16 reg_read(ics2115_state *chip)
 		}
 
 		case 0x10: // [osc] Oscillator Control
-			ret = voice->osc.ctl << 8;
+			ret = voice->osc_ctrl.value << 8;
 			break;
 
 		case 0x11: // [osc] Wavesample static address 27-20
@@ -1088,12 +1096,11 @@ static void reg_write(ics2115_state *chip, UINT16 data, UINT16 mem_mask)
 			if (ACCESSING_BITS_8_15)
 			{
 				data >>= 8;
-				voice->osc.ctl = (UINT8)data;
-				voice->state.on = !voice->osc.ctl; // some early PGM games need this
-				if (!data)
+				voice->osc_ctrl.value = data & 3;
+				if (!voice->osc_ctrl.bitflags.stop)
 					keyon(chip);
 				//guessing here
-				else if (data == 0xf)
+				else if (voice->osc_ctrl.bitflags.stop)
 				{
 #ifdef ICS2115_DEBUG
 #ifdef ICS2115_ISOLATE
