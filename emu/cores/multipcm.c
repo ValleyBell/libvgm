@@ -7,7 +7,7 @@
  * Information by R. Belmont and the YMF278B (OPL4) manual.
  *
  * voice registers:
- * 0: Pan
+ * 0: Pan (high nibble), effect send level (low nibble, 0-8)
  * 1: Index of sample
  * 2: LSB of pitch (low 2 bits seem unused so)
  * 3: MSB of pitch (ooooppppppppppxx) (o=octave (4 bit signed), p=pitch (10 bits), x=unused?
@@ -15,7 +15,10 @@
  * 5: bit 0: 0: interpolate volume changes, 1: direct set volume,
  *    bits 1-7 = volume attenuate (0=max, 7f=min)
  * 6: LFO frequency + Phase LFO depth
- * 7: Amplitude LFO size
+ * 7: Attack rate (high nibble), decay 1 rate (low nibble)
+ * 8: Decay level (high nibble), decay 2 rate (low nibble)
+ * 9: Rate correction (high nibble), release rate (low nibble)
+ * 10: Amplitude LFO size
  *
  * The first sample ROM contains a variable length metadata table with 12
  * bytes per instrument sample. This is very similar to the YMF278B 'OPL4'.
@@ -27,9 +30,9 @@
  * Bit 21 is used by the MU5 on some samples for as-yet unknown purposes. (YMW-258-F has 22 address pins.)
  * The next 2 bytes are the loop start point, in samples (big endian) (3, 4)
  * The next 2 are the 2's complement negation of of the total number of samples (big endian) (5, 6)
- * The next byte is LFO freq + depth (copied to reg 6 ?) (7, 8)
- * The next 3 are envelope params (Attack, Decay1 and 2, sustain level, release, Key Rate Scaling) (9, 10, 11)
- * The next byte is Amplitude LFO size (copied to reg 7 ?)
+ * The next byte is LFO freq + depth (copied to reg 6) (7)
+ * The next 3 are envelope params (Attack, Decay1 and 2, sustain level, release, Key Rate Scaling) (copied to reg 7-9) (8, 9, 10)
+ * The next byte is Amplitude LFO size (copied to reg 10) (11)
  *
  * TODO
  * - http://dtech.lv/techarticles_yamaha_chips.html indicates FM support, which we don't have yet.
@@ -176,7 +179,7 @@ typedef struct
 
 typedef struct
 {
-	UINT8 regs[8];
+	UINT8 regs[11];
 	UINT8 playing;
 	sample_t sample;
 	UINT32 base;
@@ -186,6 +189,7 @@ typedef struct
 	UINT32 step;
 	UINT8 reverse;
 	UINT32 pan;
+	UINT32 dsp_send;
 	UINT32 total_level;
 	UINT32 dest_total_level;
 	INT32 total_level_step;
@@ -247,6 +251,13 @@ static const INT32 VALUE_TO_CHANNEL[32] =
 	21,22,23,24,25,26,27, -1,
 };
 
+// effect send level, 32 = unity. Steps of 3dB like the pan levels. (values above 8 not verified)
+/*
+static const UINT8 DSP_SEND_LEVEL[16] =
+{
+	0, 3, 4, 6, 8, 12, 16, 24, 32, 32, 32, 32, 32, 32, 32, 32
+};
+*/
 
 /*******************************
         ENVELOPE SECTION
@@ -306,7 +317,7 @@ static void retrigger_sample(MultiPCM *ptChip, slot_t *slot)
 
 	envelope_generator_calc(ptChip, slot);
 	slot->envelope_gen.state = ATTACK;
-	slot->envelope_gen.volume = 0;
+	slot->envelope_gen.volume = (0x3ff - 0x2a0) << EG_SHIFT;
 }
 
 static void update_step(MultiPCM *ptChip, slot_t *slot)
@@ -343,7 +354,7 @@ static INT32 envelope_generator_update(MultiPCM *ptChip, slot_t *slot)
 	switch(slot->envelope_gen.state)
 	{
 	case ATTACK:
-		slot->envelope_gen.volume += slot->envelope_gen.attack_rate;
+		slot->envelope_gen.volume += ((INT64)((0x817 << (EG_SHIFT - 1)) - slot->envelope_gen.volume) * slot->envelope_gen.attack_rate) >> 24;
 		if (slot->envelope_gen.volume >= (0x3ff << EG_SHIFT))
 		{
 			slot->envelope_gen.state = DECAY1;
@@ -722,12 +733,16 @@ static void write_slot(MultiPCM *ptChip, slot_t *slot, INT32 reg, UINT8 data)
 	{
 		case 0: // PANPOT
 			slot->pan = (data >> 4) & 0xf;
+			slot->dsp_send = (data >> 0) & 0xf;
 			break;
 		case 1: // Sample
 			// according to YMF278 sample write causes some base params written to the regs (envelope+lfos)
 			init_sample(ptChip, &slot->sample, slot->regs[1] | ((slot->regs[2] & 1) << 8));
 			write_slot(ptChip, slot, 6, slot->sample.lfo_vibrato_reg);
-			write_slot(ptChip, slot, 7, slot->sample.lfo_amplitude_reg);
+			slot->regs[7] = (slot->sample.attack_reg << 4) | slot->sample.decay1_reg;
+			slot->regs[8] = (slot->sample.decay_level << 4) | slot->sample.decay2_reg;
+			slot->regs[9] = (slot->sample.key_rate_scale << 4) | slot->sample.release_reg;
+			write_slot(ptChip, slot, 10, slot->sample.lfo_amplitude_reg);
 
 			slot->base = slot->sample.start;
 			if (ptChip->sega_banking)
@@ -795,15 +810,26 @@ static void write_slot(MultiPCM *ptChip, slot_t *slot, INT32 reg, UINT8 data)
 			}
 			break;
 		case 6: // LFO frequency + Pitch LFO
-		case 7: // Amplitude LFO
+		case 10: // Amplitude LFO
 			slot->lfo_frequency = (slot->regs[6] >> 3) & 7;
 			slot->vibrato = slot->regs[6] & 7;
-			slot->tremolo = slot->regs[7] & 7;
+			slot->tremolo = slot->regs[10] & 7;
 			if (data)
 			{
 				lfo_compute_step(ptChip, &slot->pitch_lfo, slot->lfo_frequency, slot->vibrato, 0);
 				lfo_compute_step(ptChip, &slot->amplitude_lfo, slot->lfo_frequency, slot->tremolo, 1);
 			}
+			break;
+		case 7:
+		case 8:
+		case 9:
+			slot->sample.attack_reg = slot->regs[7] >> 4;
+			slot->sample.decay1_reg = slot->regs[7] & 0xf;
+			slot->sample.decay_level = slot->regs[8] >> 4;
+			slot->sample.decay2_reg = slot->regs[8] & 0xf;
+			slot->sample.key_rate_scale = slot->regs[9] >> 4;
+			slot->sample.release_reg = slot->regs[9] & 0xf;
+			envelope_generator_calc(ptChip, slot);
 			break;
 	}
 }
@@ -829,6 +855,7 @@ static void MultiPCM_update(void *info, UINT32 samples, DEV_SMPL **outputs)
 	{
 		DEV_SMPL smpl = 0;
 		DEV_SMPL smpr = 0;
+		//DEV_SMPL send = 0;
 		for (sl = 0; sl < 28; ++sl)
 		{
 			slot_t *slot = &ptChip->slots[sl];
@@ -904,11 +931,19 @@ static void MultiPCM_update(void *info, UINT32 samples, DEV_SMPL **outputs)
 
 				smpl += (left_pan_table[vol] * sample) >> TL_SHIFT;
 				smpr += (right_pan_table[vol] * sample) >> TL_SHIFT;
+
+				/*
+				// the effect send is mono and taken before the pan
+				if (slot->dsp_send)
+					send += (((left_pan_table[vol & 0x7f] * sample) >> TL_SHIFT) * DSP_SEND_LEVEL[slot->dsp_send]) >> 5;
+				*/
 			}
 		}
 
 		outputs[0][i] = smpl;
 		outputs[1][i] = smpr;
+		//if (dsp_send_enable)
+			//outputs[2][i] = send;
 	}
 }
 
@@ -927,16 +962,22 @@ static void multipcm_write(void *info, UINT8 offset, UINT8 data)
 		case 0:     //Data write
 			if (ptChip->cur_slot == -1)
 				return;
-			write_slot(ptChip, &ptChip->slots[ptChip->cur_slot], ptChip->address, data);
+			if (ptChip->address < 11)
+				write_slot(ptChip, &ptChip->slots[ptChip->cur_slot], ptChip->address, data);
 			break;
 		case 1:
 			ptChip->cur_slot = VALUE_TO_CHANNEL[data & 0x1f];
 			break;
 
 		case 2:
-			ptChip->address = (data > 7) ? 7 : data;
+			ptChip->address = data;
 			break;
 
+		/*
+		case 0xd: // control data for the effect DSP, shifted out on DSPCDS
+			m_dsp_cd_cb(data);
+			break;
+		*/
 		// special SEGA banking
 		case 0x10:	// 1 MB banking (Sega Model 1)
 			ptChip->sega_banking = 1;
@@ -957,8 +998,8 @@ static void multipcm_write(void *info, UINT8 offset, UINT8 data)
 static void multipcm_w_quick(void *info, UINT8 offset, UINT8 data)
 {
 	MultiPCM *ptChip = (MultiPCM *)info;
-	ptChip->cur_slot = VALUE_TO_CHANNEL[(offset >> 3) & 0x1F];
-	ptChip->address = offset & 0x07;
+	ptChip->cur_slot = VALUE_TO_CHANNEL[(offset >> 4) & 0x1f];
+	ptChip->address = offset & 0x0f;
 	if (ptChip->cur_slot == -1)
 		return;
 	write_slot(ptChip, ptChip->slots + ptChip->cur_slot, ptChip->address, data);
