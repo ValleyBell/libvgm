@@ -49,6 +49,10 @@
 #define DEVID_MSM5232	0x2D
 #define DEVID_BSMT2000	0x2E
 #define DEVID_ICS2115	0x2F
+#define DEVID_NAMCOWSG	0x30	// discrete variant of Namco WSG
+#define DEVID_NAMCOC15	0x31	// also known as Namco 15XX
+#define DEVID_NAMCOC30	0x32	// also known as Namco CUS30, Bit 31 = Stereo
+#define DEVID_NAMCOPPW	0x33	// Namco Pole position specific WSG
 #define DEVID_YM2414	0x81	// YM2414 (OPZ), used in TX81Z
 
 #endif	// __SOUNDDEVS_H__

@@ -230,6 +230,17 @@ LIBEMUOBJS = \
 	$(LIBEMUOBJ)/cores/x1_010.o \
 	$(LIBEMUOBJ)/cores/c352.o \
 	$(LIBEMUOBJ)/cores/iremga20.o \
+	$(LIBEMUOBJ)/cores/mikey.o \
+	$(LIBEMUOBJ)/cores/k007232.o \
+	$(LIBEMUOBJ)/cores/k005289.o \
+	$(LIBEMUOBJ)/cores/msm5205.o \
+	$(LIBEMUOBJ)/cores/msm5232.o \
+	$(LIBEMUOBJ)/cores/bsmt2000.o \
+	$(LIBEMUOBJ)/cores/ics2115.o \
+	$(LIBEMUOBJ)/cores/namcowsg.o \
+	$(LIBEMUOBJ)/cores/namcoc15.o \
+	$(LIBEMUOBJ)/cores/namcoc30.o \
+	$(LIBEMUOBJ)/cores/namcoppw.o \
 	$(LIBEMUOBJ)/cores/ymfmintf.o \
 	$(LIBEMUOBJ)/Resampler.o \
 	$(LIBEMUOBJ)/panning.o \
