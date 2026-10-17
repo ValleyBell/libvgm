@@ -294,7 +294,6 @@ static void Resmpl_Exec_LinearUp(RESMPL_STATE* CAA, UINT32 length, WAVE_32BS* re
 		CAA->smpNext = InNow;
 		//for (OutPos = 0; OutPos < length; OutPos ++)
 		//{
-		//InPos = InBase + (UINT32)(OutPos * ChipSmpRateFP / CAA->smpRateDst);
 		InPos = InBase;
 		
 		InPre = fp2i_floor(InPos);
@@ -374,6 +373,9 @@ static void Resmpl_Exec_LinearDown(RESMPL_STATE* CAA, UINT32 length, WAVE_32BS* 
 	INT64 TempSmpR;
 	INT32 SmpCnt;	// must be signed, else I'm getting calculation errors
 	UINT64 ChipSmpRateFP;
+	UINT64 Step;
+	UINT64 Phase;
+	UINT64 RemainderStep;
 	
 	ChipSmpRateFP = FIXPNT_FACT * (UINT64)CAA->smpRateSrc;
 	InPosL = (SLINT)((CAA->smpP + length) * ChipSmpRateFP / CAA->smpRateDst);
@@ -400,13 +402,22 @@ static void Resmpl_Exec_LinearDown(RESMPL_STATE* CAA, UINT32 length, WAVE_32BS* 
 	InPosL = (SLINT)(CAA->smpP * ChipSmpRateFP / CAA->smpRateDst);
 	// I'm adding 1.0 to avoid negative indexes
 	InBase = FIXPNT_FACT + (UINT32)(InPosL - (SLINT)CAA->smpLast * FIXPNT_FACT);
+	// Preserve the absolute fractional phase across render block boundaries:
+	Step = ChipSmpRateFP / CAA->smpRateDst;
+	RemainderStep = ChipSmpRateFP % CAA->smpRateDst;
+	Phase = (CAA->smpP * ChipSmpRateFP) % CAA->smpRateDst;
 	InPosNext = InBase;
 	InPre = fp2i_floor(InPosNext);
 	for (OutPos = 0; OutPos < length; OutPos ++)
 	{
-		//InPos = InBase + (UINT32)(OutPos * ChipSmpRateFP / CAA->smpRateDst);
 		InPos = InPosNext;
-		InPosNext = InBase + (UINT32)((OutPos+1) * ChipSmpRateFP / CAA->smpRateDst);
+		InPosNext += (UINT32)Step;
+		Phase += RemainderStep;
+		if (Phase >= CAA->smpRateDst)
+		{
+			Phase -= CAA->smpRateDst;
+			InPosNext ++;
+		}
 		
 		// first fractional Sample
 		SmpFrc = getnfraction(InPos);
