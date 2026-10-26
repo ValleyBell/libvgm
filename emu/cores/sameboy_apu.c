@@ -2359,6 +2359,28 @@ static void device_reset_gb_sameboy(void *chip)
 
 	gb_sameboy_set_mute_mask(gb, muteMask);
 
+	if (gb->model < GB_MODEL_CGB_0)
+	{
+		// DMG model
+		static const uint8_t waveRamInit[GB_IO_WAV_END + 1 - GB_IO_WAV_START] = {
+			//0xAC, 0xDD, 0xDA, 0x48, 0x36, 0x02, 0xCF, 0x16,	// initialization values from MAME
+			//0x2C, 0x04, 0xE5, 0x2C, 0xAC, 0xDD, 0xDA, 0x48,
+			0x84, 0x40, 0x43, 0xAA, 0x2D, 0x78, 0x92, 0x3C,	// initialization values from GbdevWiki (gbdev.gg8.se)
+			0x60, 0x59, 0x59, 0xB0, 0x34, 0xB8, 0x2E, 0xDA,
+		};
+		// Note: SameBoy initializes this using random values on every reset. (see Core/gb.c: reset_ram())
+		memcpy(&gb->io_registers[GB_IO_WAV_START], waveRamInit, GB_IO_WAV_END + 1 - GB_IO_WAV_START);
+	}
+	else
+	{
+		// GameBoy Color / Advance
+		static const uint8_t waveRamInit[GB_IO_WAV_END + 1 - GB_IO_WAV_START] = {
+			0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF,
+			0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF,
+		};
+		memcpy(&gb->io_registers[GB_IO_WAV_START], waveRamInit, GB_IO_WAV_END + 1 - GB_IO_WAV_START);
+	}
+
 	return;
 }
 
