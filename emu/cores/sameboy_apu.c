@@ -1880,6 +1880,8 @@ static void GB_apu_write(GB_gameboy_t *gb, uint8_t reg, uint8_t value)
                             gb->apu.square_sweep_calculate_countdown_reload_timer++;
                         }
                         gb->apu.shadow_sweep_sample_length = gb->apu.square_channels[GB_SQUARE_1].sample_length; // TODO: Is this correct or just a workaround for a timing bug in the SameBoy libvgm port? -Valley Bell
+                        // https://web.archive.org/web/20261015034906/https://gbdev.gg8.se/wiki/articles/Gameboy_sound_hardware#Frequency_Sweep says:
+                        // "frequency is copied to the shadow register", so this may be correct.
                         gb->apu.sweep_length_addend = gb->apu.square_channels[GB_SQUARE_1].sample_length;
                         gb->apu.sweep_length_addend >>= (gb->io_registers[GB_IO_NR10] & 7);
                     }

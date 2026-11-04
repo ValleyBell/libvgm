@@ -107,6 +107,8 @@ struct _bsmt2000_state
     // ADPCM/compressed state
     INT32 adpcm_current;
     INT32 adpcm_delta_n;
+    UINT16 adpcm_delta_init;    // register 0x76: ADPCM scale factor at start
+    UINT16 mod_depth;           // register 0x77: how much voice 1 bends voice 0's pitch, see bsmt2000_update
 
     // Output sample rate
     double sample_rate;
@@ -215,8 +217,7 @@ const DEV_DECL sndDev_BSMT2000 =
 
 static void init_voice(bsmt2000_voice *voice)
 {
-    memset(voice, 0, sizeof(*voice));
-    // M1/MAME uses 0 for volumes on reset/init.
+    memset(voice, 0, sizeof(*voice)); // the chip's program clears its RAM on reset, so also all volumes
     voice->reg[BSMT2000_REG_LEFTVOL] = 0;
     voice->reg[BSMT2000_REG_RIGHTVOL] = 0;
     voice->position = 0;
@@ -244,21 +245,19 @@ static UINT8 device_start_bsmt2000(const DEV_GEN_CFG* cfg, DEV_INFO* retDevInf)
     chip->sample_rom_mask = 0x00;
     chip->total_banks = 0;
 
-    chip->right_volume_set = 0;
-
     chip->voices = 12;       // default: 12 PCM (may be overridden later)
     chip->stereo = 1;        // default: stereo enabled
     chip->adpcm = 1;         // default: ADPCM enabled
 
+    chip->right_volume_set = 0;
+    chip->mod_depth = 0;
+
+    chip->last_register = 1; // Mode 1
     chip->mode = 1;
+
     chip->clock = cfg->clock;
     chip->sample_rate = chip->clock / 1000.0;
-    chip->last_register = 1; // Mode 1
 
-    chip->adpcm_current = 0;
-    chip->adpcm_delta_n = 10;
-
-    init_all_voices(chip);
     bsmt2000_set_mute_mask(chip, 0x0000);
 
     chip->_devData.chipInf = chip;
@@ -281,14 +280,17 @@ static void device_reset_bsmt2000(void *info) {
 
     init_all_voices(chip);
     chip->adpcm_current = 0;
-    chip->adpcm_delta_n = 10;
+    chip->adpcm_delta_init = 10; // the chip's program sets 0x76 to this on reset
+    chip->adpcm_delta_n = chip->adpcm_delta_init;
+    chip->mod_depth = 0; // the chip's program clears its RAM on reset, 0x77 included
+
     switch (chip->last_register)
     {
         default:
             break;
         /* mode 0: 24kHz, 12 channel PCM, 1 channel ADPCM, mono; from PinMAME */
         case 0:
-            chip->sample_rate = chip->clock / 1000.;
+            chip->sample_rate = chip->clock / 4. / 249.5;
             chip->stereo = 0;
             chip->voices = 12;
             chip->adpcm = 1;
@@ -296,7 +298,7 @@ static void device_reset_bsmt2000(void *info) {
             break;
         /* mode 1: 24kHz, 11 channel PCM, 1 channel ADPCM, stereo */
         case 1:
-            chip->sample_rate = chip->clock / 1000.;
+            chip->sample_rate = chip->clock / 4. / 250.5;
             chip->stereo = 1;
             chip->voices = 11;
             chip->adpcm = 1;
@@ -304,23 +306,23 @@ static void device_reset_bsmt2000(void *info) {
             break;
         /* mode 5: 24kHz, 12 channel PCM, stereo */
         case 5:
-            chip->sample_rate = chip->clock / 1000.;
+            chip->sample_rate = chip->clock / 4. / 254.;
             chip->stereo = 1;
             chip->voices = 12;
             chip->adpcm = 0;
             chip->mode = 5;
             break;
-        /* mode 6: 34kHz, 8 channel PCM, stereo */
+        /* mode 6: 34kHz (actually more like 31kHz), 8 channel PCM, stereo */
         case 6:
-            chip->sample_rate = chip->clock / 706.;
+            chip->sample_rate = chip->clock / 4. / 193.;
             chip->stereo = 1;
             chip->voices = 8;
             chip->adpcm = 0;
             chip->mode = 6;
             break;
-        /* mode 7: 32kHz, 9 channel PCM, stereo */
+        /* mode 7: 32kHz (actually more like 29kHz), 9 channel PCM, stereo */
         case 7:
-            chip->sample_rate = chip->clock / 750.;
+            chip->sample_rate = chip->clock / 4. / 208.;
             chip->stereo = 1;
             chip->voices = 9;
             chip->adpcm = 0;
@@ -368,6 +370,12 @@ static void bsmt2000_write_data(void *info, UINT8 address, UINT16 data) {
 
     chip->last_register = address;
 
+    if (address == 0x77) // modulation depth (used in modes 0 and 1, see bsmt2000_update)
+    {
+        chip->mod_depth = data;
+        return;
+    }
+
     // Standard voices (interleaved register layout)
     if (address < 0x6d) {
         int voice_index;
@@ -384,7 +392,9 @@ static void bsmt2000_write_data(void *info, UINT8 address, UINT16 data) {
 
         switch (regindex) {
             case BSMT2000_REG_CURRPOS: // REG_CURRPOS
-                voice->position = data << 16;
+                // writing the position keeps the fraction as-is, same as on the real chip
+                voice->position &= 0xffff;
+                voice->position |= data << 16;
                 break;
             case BSMT2000_REG_RATE: // REG_RATE
                 voice->adjusted_rate = data << 5;
@@ -411,19 +421,31 @@ static void bsmt2000_write_data(void *info, UINT8 address, UINT16 data) {
         case 0x6f:
             voice->reg[BSMT2000_REG_BANK] = data; // REG_BANK
             break;
-        case 0x6e: // main right channel volume control, used when ADPCM is alreay playing
-        case 0x74:
+        case 0x73: //rate - used as a control to tell chip ready to output compressed data (value = 1 for valid data)
+            voice->reg[BSMT2000_REG_RATE] = data;
+            if(voice->reg[BSMT2000_REG_RATE] != 0)
+            {
+                /* reset adpcm values also */
+                chip->adpcm_current = 0;
+                chip->adpcm_delta_n = chip->adpcm_delta_init;
+            }
+            break;
+        case 0x76: //initial scale factor, copied on start (10 after reset)
+            chip->adpcm_delta_init = data;
+            break;
+        case 0x6e: // main right channel volume control, used when ADPCM is already playing
+        case 0x74: // right channel volume control, copied on start to 0x6e
             voice->reg[BSMT2000_REG_RIGHTVOL] = data; // REG_RIGHTVOL
             chip->right_volume_set = 1;
             break;
-        case 0x75:
+        case 0x75: // sample start position
             voice->reg[BSMT2000_REG_CURRPOS] = data; // REG_CURRPOS
             voice->position = data << 16;
             chip->adpcm_current = 0;
             chip->adpcm_delta_n = 10;
             break;
         case 0x70: // main left channel volume control, used when ADPCM is alreay playing
-        case 0x78:
+        case 0x78: // left channel volume control, copied on start to 0x70
             voice->reg[BSMT2000_REG_LEFTVOL] = data; // REG_LEFTVOL
             break;
         }
@@ -487,8 +509,10 @@ static void bsmt2000_update(void *param, UINT32 samples, DEV_SMPL **outputs)
     bsmt2000_state *chip = (bsmt2000_state *)param;
     INT32 left[BSMT2000_SAMPLE_CHUNK];
     INT32 right[BSMT2000_SAMPLE_CHUNK];
+    INT32 modbuf[BSMT2000_SAMPLE_CHUNK]; /* voice 1's samples, the modulator of voice 0 (register 0x77) */
     bsmt2000_voice *voice;
-    int samp, v, length = MIN(samples, BSMT2000_SAMPLE_CHUNK);	// TODO: allow updating in larger chunks
+    int samp, v, modulate;
+    int length = MIN(samples, BSMT2000_SAMPLE_CHUNK);	// TODO: allow updating in larger chunks
 
     if (!chip->sample_rom || !chip->sample_rom_length)
     {
@@ -499,16 +523,25 @@ static void bsmt2000_update(void *param, UINT32 samples, DEV_SMPL **outputs)
     memset(left, 0, length * sizeof(left[0]));
     memset(right, 0, length * sizeof(right[0]));
 
+    /* Register 0x77: in modes 0/1 the chip's program multiplies it with voice 1's current sample and adds that to voice 0's
+       step (mode 1: lt 59; mpy 77; ... add, around word 0x3d0 of bsmt2000.bin; mode 0: lt 55; modes 5-7 don't have it).
+       So voice 1, usually at volume 0, bends voice 0's pitch: the BSMT logo jingle's chirp (0x77 ramped 0x0200..0x7e00,
+       voice 1 looping the same sample at twice the rate). Voice 1 is computed first then, to have its samples at hand */
+    modulate = chip->mod_depth != 0 && chip->mode <= 1 && chip->voices > 1;
+    if (modulate)
+        memset(modbuf, 0, length * sizeof(modbuf[0]));
+
     // PCM voices
     for (v = 0; v < chip->voices; v++)
     {
+        int vn = (modulate && v < 2) ? (1 - v) : v; // 1, 0, 2, 3, ... when modulating
         UINT8 *base;
         UINT32 rate, pos;
         INT32 lvol, rvol;
 
-        if (chip->Muted[v])
+        if (chip->Muted[vn])
             continue;
-        voice = &chip->voice[v];
+        voice = &chip->voice[vn];
         if (voice->reg[BSMT2000_REG_BANK] >= chip->total_banks) // REG_BANK
             continue;
         base = chip->sample_rom + voice->reg[BSMT2000_REG_BANK] * BSMT2000_ROM_BANKSIZE;
@@ -534,11 +567,33 @@ static void bsmt2000_update(void *param, UINT32 samples, DEV_SMPL **outputs)
                 INT32 s2 = (INT8)base[idx+1] << 8;
                 sample = INTERPOLATE(s1, s2, pos);
             }
+            /* apply volumes and add */
             left[samp]  += (sample * lvol) >> 16;
             right[samp] += (sample * rvol) >> 16;
-            pos += rate;
-            if (pos >= voice->loop_stop_position)
-                pos += voice->loop_start_position - voice->loop_stop_position;
+
+            /* check for loop end, as the chip: it advances, reads the sample, then wraps (so the sample past the loop end
+               is played once), comparing the 16.16 positions as 16bit difference, and keeps the fraction */
+            {
+                const INT32 d = pos - voice->loop_stop_position;
+                if (d > 0 || (d == 0 && (pos & 0xffff) != 0))
+                    pos = pos + voice->loop_start_position - voice->loop_stop_position;
+            }
+
+            /* update position */
+            if (modulate && vn == 1)
+                modbuf[samp] = base[idx] << 8; // the chip reads the raw sample
+            if (modulate && vn == 0)
+            {
+                // as the chip: ((sample * 0x77) >> 16) * rate >> 16, added to the 16.16 position << 10 (<< 5 here);
+                // it can exceed the rate, so the position runs backwards then (16bit, wrapping)
+                const INT32 bend = (((modbuf[samp] * (INT32)(INT16)chip->mod_depth) >> 16) * (INT32)(INT16)rate) >> 16;
+                const INT32 f = (INT32)(pos & 0xffff) + (INT32)rate + bend;
+                pos += f;
+            }
+            else
+            {
+                pos += rate;
+            }
         }
         voice->position = pos;
     }
@@ -566,23 +621,27 @@ static void bsmt2000_update(void *param, UINT32 samples, DEV_SMPL **outputs)
                 pos += rate;
                 if ((oldpos ^ pos) & 0x8000)
                 {
-                    static const UINT8 delta_tab[16] = { 154, 154, 128, 102, 77, 58, 58, 58, 58, 58, 58, 58, 77, 102, 128, 154 };
+                    static const UINT8 delta_tab[16] = { 154, 154, 128, 102, 77, 58, 58, 58, 58, 58, 58, 58, 77, 102, 128, 154 }; // as the chip's table (at word 0x064 of bsmt2000.bin)
+                    // extract corresponding nibble and convert to full integer
                     int nibble = base[oldpos >> 16] >> ((~oldpos >> 13) & 4);
                     INT32 value = (nibble & 0xF) | ((nibble & 0x8) ? ~0xF : 0);
                     int temp;
 
+                    /* compute the delta for this sample: the chip adds +-delta_n/2 in 16.16 and keeps the upper word, so the half step is rounded down on both sides (also for 0) */
                     temp = chip->adpcm_delta_n * value;
                     if (value > 0)
                         temp += chip->adpcm_delta_n >> 1;
                     else
-                        temp -= chip->adpcm_delta_n >> 1;
+                        temp -= (chip->adpcm_delta_n + 1) >> 1;
 
+                    /* add and clamp against the sample (the chip saturates) */
                     chip->adpcm_current += temp;
                     if (chip->adpcm_current > 32767)
                         chip->adpcm_current = 32767;
                     else if (chip->adpcm_current < -32768)
                         chip->adpcm_current = -32768;
 
+                    /* adjust the delta multiplier, clamped to 1..2000 as the chip does */
                     chip->adpcm_delta_n = (chip->adpcm_delta_n * delta_tab[value + 8]) >> 6;
                     if (chip->adpcm_delta_n > 2000)
                         chip->adpcm_delta_n = 2000;
